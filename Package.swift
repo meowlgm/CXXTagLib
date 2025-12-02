@@ -5,12 +5,23 @@ import PackageDescription
 
 let package = Package(
 	name: "CXXTagLib",
+	platforms: [
+		.macOS(.v10_15),
+		.iOS(.v13),
+		.tvOS(.v13),
+		.watchOS(.v6),
+	],
 	products: [
 		// Products define the executables and libraries a package produces, making them visible to other packages.
 		.library(
 			name: "taglib",
 			targets: [
 				"taglib",
+			]),
+		.library(
+			name: "TagLibSwift",
+			targets: [
+				"TagLibSwift",
 			]),
 	],
 	targets: [
@@ -26,10 +37,30 @@ let package = Package(
 				.headerSearchPath("riff"),
 				.headerSearchPath("toolkit"),
 			]),
+		.target(
+			name: "TagLibBridge",
+			dependencies: [
+				"taglib",
+			],
+			publicHeadersPath: "include",
+			cxxSettings: [
+				.headerSearchPath("../taglib/include/taglib"),
+			]),
+		.target(
+			name: "TagLibSwift",
+			dependencies: [
+				"taglib",
+				"TagLibBridge",
+			]),
 		.testTarget(
 			name: "CXXTagLibTests",
 			dependencies: [
 				"taglib",
+			]),
+		.testTarget(
+			name: "TagLibSwiftTests",
+			dependencies: [
+				"TagLibSwift",
 			]),
 	],
 	cxxLanguageStandard: .cxx17
