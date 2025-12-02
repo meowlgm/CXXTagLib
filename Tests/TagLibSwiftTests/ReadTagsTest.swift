@@ -3,46 +3,27 @@ import XCTest
 
 final class ReadTagsTest: XCTestCase {
     
-    func testRestoreTags() throws {
+    func testRating() throws {
         let path = "/Users/meowlgm/Music/LX/让一切随风 - 钟镇涛.mp3"
         
         let file = try AudioFile(path: path)
         
-        print("\n========== 恢复标签 ==========")
+        print("\n========== 当前评分 ==========")
+        print("rating (0-255): \(file.rating.map { String($0) } ?? "(nil)")")
+        print("ratingStars (0-5): \(file.ratingStars.map { String($0) } ?? "(nil)")")
+        print("playCount: \(file.playCount)")
         
-        // 设置基础标签
-        file.title = "让一切随风"
-        file.artist = "钟镇涛"
-        file.album = "听涛"
-        file.genre = "粤语流行"
-        file.year = 1987
-        file.track = 1
-        
-        // 设置扩展标签
-        file.albumArtist = "钟镇涛"
-        file.composer = "大野克夫"
-        file.lyricist = "黄霑"  // 这次存正确的作词人名字
-        
+        // 设置 5 星评分
+        print("\n========== 设置 5 星评分 ==========")
+        file.ratingStars = 5
+        file.playCount = 10
         file.save()
         
         // 验证
         let file2 = try AudioFile(path: path)
-        
-        print("\n========== 恢复后 ==========")
-        for prop in file2.allPropertiesRaw() {
-            print("[\(prop.source)] \(prop.key): \(prop.value)")
-        }
-        
-        print("\n========== 验证 ==========")
-        print("title:       \(file2.title ?? "(nil)")")
-        print("artist:      \(file2.artist ?? "(nil)")")
-        print("album:       \(file2.album ?? "(nil)")")
-        print("genre:       \(file2.genre ?? "(nil)")")
-        print("year:        \(file2.year.map { String($0) } ?? "(nil)")")
-        print("track:       \(file2.track.map { String($0) } ?? "(nil)")")
-        print("albumArtist: \(file2.albumArtist ?? "(nil)")")
-        print("composer:    \(file2.composer ?? "(nil)")")
-        print("lyricist:    \(file2.lyricist ?? "(nil)")")
+        print("rating (0-255): \(file2.rating.map { String($0) } ?? "(nil)")")
+        print("ratingStars (0-5): \(file2.ratingStars.map { String($0) } ?? "(nil)")")
+        print("playCount: \(file2.playCount)")
     }
     
     func testReadAllTags() throws {

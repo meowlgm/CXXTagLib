@@ -147,6 +147,33 @@ file.artist = "The Beatles"
 file.artistSort = "Beatles, The"
 ```
 
+### 评分与播放次数
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `rating` | `Int?` | 原始评分 (0-255)，nil 表示未设置 |
+| `ratingStars` | `Int?` | 星级评分 (0-5)，自动转换 |
+| `playCount` | `UInt` | 播放次数 |
+
+```swift
+// 读取
+let stars = file.ratingStars  // 0, 1, 2, 3, 4, 5 或 nil
+
+// 设置
+file.ratingStars = 5  // 设置 5 星
+file.playCount = 10
+
+// 删除
+file.ratingStars = nil  // 删除评分（POPM 帧）
+```
+
+> **星级映射（Windows Media Player 标准）**：
+> | 星级 | 值 | | 星级 | 值 |
+> |------|-----|---|------|-----|
+> | 1⭐ | 1 | | 4⭐ | 196 |
+> | 2⭐ | 64 | | 5⭐ | 255 |
+> | 3⭐ | 128 | | | |
+
 ### 其他标签
 
 | 属性 | 类型 | 说明 |

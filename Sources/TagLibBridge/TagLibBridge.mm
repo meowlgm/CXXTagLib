@@ -36,6 +36,9 @@
 #include <taglib/mp4coverart.h>
 #include <taglib/asfpicture.h>
 
+// Rating (Popularimeter)
+#include <taglib/popularimeterframe.h>
+
 #include <taglib/tpropertymap.h>
 
 using namespace TagLib;
@@ -753,6 +756,101 @@ static int pictureTypeFromString(NSString *str) {
     // Fallback: clear properties
     file->setProperties({});
     return YES;
+}
+
+// MARK: - Rating (POPM)
+
+- (ID3v2::PopularimeterFrame *)getPopmFrame:(BOOL)create {
+    File *file = _fileRef->file();
+    if (!file) return nullptr;
+    
+    ID3v2::Tag *id3v2Tag = nullptr;
+    
+    // Try to get ID3v2 tag from various formats
+    if (auto *mpegFile = dynamic_cast<MPEG::File *>(file)) {
+        id3v2Tag = mpegFile->ID3v2Tag(create);
+    } else if (auto *flacFile = dynamic_cast<FLAC::File *>(file)) {
+        id3v2Tag = flacFile->ID3v2Tag(create);
+    } else if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+        id3v2Tag = wavFile->ID3v2Tag();
+    } else if (auto *aiffFile = dynamic_cast<RIFF::AIFF::File *>(file)) {
+        id3v2Tag = dynamic_cast<ID3v2::Tag *>(aiffFile->tag());
+    } else if (auto *dsfFile = dynamic_cast<DSF::File *>(file)) {
+        id3v2Tag = dsfFile->tag();
+    } else if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
+        id3v2Tag = dsdiffFile->ID3v2Tag(create);
+    } else if (auto *ttaFile = dynamic_cast<TrueAudio::File *>(file)) {
+        id3v2Tag = ttaFile->ID3v2Tag(create);
+    }
+    
+    if (!id3v2Tag) return nullptr;
+    
+    // Look for existing POPM frame
+    const ID3v2::FrameList &frames = id3v2Tag->frameList("POPM");
+    if (!frames.isEmpty()) {
+        return dynamic_cast<ID3v2::PopularimeterFrame *>(frames.front());
+    }
+    
+    // Create new frame if requested
+    if (create) {
+        auto *frame = new ID3v2::PopularimeterFrame();
+        id3v2Tag->addFrame(frame);
+        return frame;
+    }
+    
+    return nullptr;
+}
+
+- (NSInteger)rating {
+    if (!self.isValid) return -1;
+    
+    if (ID3v2::PopularimeterFrame *frame = [self getPopmFrame:NO]) {
+        return frame->rating();
+    }
+    return -1;
+}
+
+- (void)setRating:(NSInteger)rating {
+    if (!self.isValid) return;
+    
+    if (rating < 0) {
+        // Remove POPM frame
+        File *file = _fileRef->file();
+        if (!file) return;
+        
+        ID3v2::Tag *id3v2Tag = nullptr;
+        if (auto *mpegFile = dynamic_cast<MPEG::File *>(file)) {
+            id3v2Tag = mpegFile->ID3v2Tag(false);
+        } else if (auto *flacFile = dynamic_cast<FLAC::File *>(file)) {
+            id3v2Tag = flacFile->ID3v2Tag(false);
+        }
+        
+        if (id3v2Tag) {
+            id3v2Tag->removeFrames("POPM");
+        }
+        return;
+    }
+    
+    if (ID3v2::PopularimeterFrame *frame = [self getPopmFrame:YES]) {
+        frame->setRating(static_cast<int>(MIN(rating, 255)));
+    }
+}
+
+- (NSUInteger)playCount {
+    if (!self.isValid) return 0;
+    
+    if (ID3v2::PopularimeterFrame *frame = [self getPopmFrame:NO]) {
+        return frame->counter();
+    }
+    return 0;
+}
+
+- (void)setPlayCount:(NSUInteger)count {
+    if (!self.isValid) return;
+    
+    if (ID3v2::PopularimeterFrame *frame = [self getPopmFrame:YES]) {
+        frame->setCounter(static_cast<unsigned int>(count));
+    }
 }
 
 // MARK: - Picture Operations for MPEG (ID3v2)

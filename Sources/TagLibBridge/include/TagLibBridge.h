@@ -78,6 +78,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// Remove all tags from the file (ID3v1, ID3v2, APE, Xiph, etc.)
 - (BOOL)removeAllTags;
 
+// MARK: - Rating (POPM)
+
+/// Get rating (0-255, or -1 if not set)
+@property (nonatomic, readonly) NSInteger rating;
+
+/// Set rating (0-255, set to -1 or negative to remove)
+- (void)setRating:(NSInteger)rating;
+
+/// Get play count (from POPM frame)
+@property (nonatomic, readonly) NSUInteger playCount;
+
+/// Set play count
+- (void)setPlayCount:(NSUInteger)count;
+
 // MARK: - Pictures
 
 /// Get all pictures

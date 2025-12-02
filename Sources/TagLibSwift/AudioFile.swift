@@ -399,6 +399,54 @@ public final class AudioFile {
         return bridge.removeAllTags()
     }
     
+    // MARK: - Rating (POPM)
+    
+    /// Rating value (0-255), nil if not set
+    /// Common mappings: 0=unrated, 1=⭐, 64=⭐⭐, 128=⭐⭐⭐, 196=⭐⭐⭐⭐, 255=⭐⭐⭐⭐⭐
+    public var rating: Int? {
+        get {
+            let value = bridge.rating
+            return value >= 0 ? Int(value) : nil
+        }
+        set {
+            bridge.setRating(newValue.map { NSInteger($0) } ?? -1)
+        }
+    }
+    
+    /// Rating as stars (0-5)
+    public var ratingStars: Int? {
+        get {
+            guard let r = rating else { return nil }
+            if r == 0 { return 0 }
+            if r < 64 { return 1 }
+            if r < 128 { return 2 }
+            if r < 196 { return 3 }
+            if r < 255 { return 4 }
+            return 5
+        }
+        set {
+            guard let stars = newValue else {
+                rating = nil
+                return
+            }
+            switch stars {
+            case 0: rating = 0
+            case 1: rating = 1
+            case 2: rating = 64
+            case 3: rating = 128
+            case 4: rating = 196
+            case 5: rating = 255
+            default: rating = nil
+            }
+        }
+    }
+    
+    /// Play count from POPM frame
+    public var playCount: UInt {
+        get { UInt(bridge.playCount) }
+        set { bridge.setPlayCount(newValue) }
+    }
+    
     // MARK: - Save
     
     /// Save changes to the file
