@@ -363,7 +363,7 @@ public final class AudioFile {
         return bridge.allPropertyKeys()
     }
     
-    /// Get all properties as a dictionary
+    /// Get all properties as a dictionary (merged, duplicates overwritten)
     public func allProperties() -> [String: String] {
         var result: [String: String] = [:]
         for key in allPropertyKeys() {
@@ -372,6 +372,31 @@ public final class AudioFile {
             }
         }
         return result
+    }
+    
+    /// Raw property entry with source information
+    public struct RawProperty {
+        public let source: String  // "ID3v2", "ID3v1", "Default", etc.
+        public let key: String
+        public let value: String
+    }
+    
+    /// Get all properties including duplicates from different tag sources
+    public func allPropertiesRaw() -> [RawProperty] {
+        let rawArray = bridge.allPropertiesRaw()
+        return rawArray.compactMap { dict in
+            guard let source = dict["source"],
+                  let key = dict["key"],
+                  let value = dict["value"] else { return nil }
+            return RawProperty(source: source, key: key, value: value)
+        }
+    }
+    
+    /// Remove all tags from the file (ID3v1, ID3v2, APE, Xiph, etc.)
+    /// Note: You must call save() after this to persist changes
+    @discardableResult
+    public func removeAllTags() -> Bool {
+        return bridge.removeAllTags()
     }
     
     // MARK: - Save

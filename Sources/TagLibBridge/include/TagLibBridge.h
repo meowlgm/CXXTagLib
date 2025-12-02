@@ -69,8 +69,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set property value for key
 - (void)setProperty:(nullable NSString *)value forKey:(NSString *)key;
 
-/// Get all property keys
+/// Get all property keys (merged, no duplicates)
 - (NSArray<NSString *> *)allPropertyKeys;
+
+/// Get all properties as array of key-value pairs (includes duplicates from different tag sources)
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)allPropertiesRaw;
+
+/// Remove all tags from the file (ID3v1, ID3v2, APE, Xiph, etc.)
+- (BOOL)removeAllTags;
 
 // MARK: - Pictures
 

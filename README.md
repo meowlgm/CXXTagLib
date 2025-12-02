@@ -122,9 +122,12 @@ file.save()  // 保存更改
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `composer` | `String?` | 作曲家 |
-| `lyricist` | `String?` | 作词者 |
+| `lyricist` | `String?` | 作词者 / 歌词 |
 | `conductor` | `String?` | 指挥 |
 | `remixer` | `String?` | 混音师 |
+
+> **💡 提示**：`lyricist` 字段（对应 ID3v2 的 TEXT 帧）常被主流音乐软件用于存储 LRC 同步歌词。如需让歌词被更多播放器识别，建议将此字段在 UI上映射为歌词
+
 
 ### 排序标签
 
@@ -184,6 +187,62 @@ let guitarist = file.performer(for: "guitar")
 // 设置
 file.setPerformer("John Mayer", for: "guitar")
 file.setPerformer("Pino Palladino", for: "bass")
+```
+
+---
+
+## 通用属性操作
+
+### 读取所有属性
+
+```swift
+// 获取所有属性键
+let keys = file.allPropertyKeys()  // [String]
+
+// 获取所有属性（合并去重）
+let props = file.allProperties()   // [String: String]
+
+// 获取所有属性（含来源，不去重）
+let rawProps = file.allPropertiesRaw()  // [RawProperty]
+for prop in rawProps {
+    print("[\(prop.source)] \(prop.key): \(prop.value)")
+}
+// 输出示例：
+// [ID3v2] TITLE: 歌曲名
+// [ID3v2] ARTIST: 艺术家
+// [ID3v1] TITLE: 歌曲名（可能与 ID3v2 不同）
+```
+
+**支持的来源标识**：
+
+| 来源 | 说明 |
+|------|------|
+| `ID3v2` | ID3v2 标签（MP3, FLAC, WAV 等）|
+| `ID3v1` | ID3v1 标签（MP3, FLAC 等）|
+| `Xiph` | Xiph/Vorbis Comment（FLAC, Ogg）|
+| `MP4` | MP4 标签（M4A, AAC）|
+| `APE` | APE 标签（APE, WavPack, MPC）|
+| `ASF` | ASF 标签（WMA）|
+
+### 读写单个属性
+
+```swift
+// 读取
+let value = file.getProperty("CUSTOM_TAG")
+
+// 设置
+file.setProperty("CUSTOM_TAG", value: "自定义值")
+
+// 删除
+file.setProperty("CUSTOM_TAG", value: nil)
+```
+
+### 清除所有标签
+
+```swift
+// 删除文件中的所有标签（ID3v1, ID3v2, APE, Xiph 等）
+file.removeAllTags()
+file.save()  // 需要保存才生效
 ```
 
 ---
@@ -395,6 +454,28 @@ do {
 3. **字符串标签**：扩展标签全部为字符串类型，数值需自行转换
 4. **保存**：修改后需调用 `save()` 才会写入文件
 5. **内存管理**：`AudioFile` 对象释放时会自动关闭文件
+
+## 标签优先级
+
+对于支持多种标签格式的文件（如 MP3），本库按以下优先级处理：
+
+| 操作 | 优先级 |
+|------|--------|
+| 读取 | ID3v2 → ID3v1 → 其他 |
+| 写入 | 优先写入 ID3v2（支持的格式）|
+| 删除 | 按优先级删除找到的那个 |
+
+**各格式的标签类型**：
+
+| 格式 | 支持的标签类型 |
+|------|---------------|
+| MP3 | ID3v2, ID3v1, APE |
+| FLAC | Xiph Comment, ID3v2, ID3v1 |
+| M4A/AAC | MP4 Tag |
+| Ogg | Xiph Comment |
+| WMA | ASF Tag |
+| APE/WavPack/MPC | APE Tag, ID3v1 |
+| WAV/AIFF | ID3v2 |
 
 ## 许可证
 
