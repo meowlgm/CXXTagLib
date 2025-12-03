@@ -1157,12 +1157,19 @@ static int pictureTypeFromString(NSString *str) {
 - (BOOL)removePictureFromXiphAtIndex:(Ogg::XiphComment *)tag index:(NSInteger)index {
     if (!tag) return NO;
     
-    const List<FLAC::Picture *> pics = tag->pictureList();
-    if (index < 0 || index >= (NSInteger)pics.size()) return NO;
+    // 重要：必须在调用 removePicture 之前释放 pictureList() 的副本
+    // 否则会因为 TagLib::List 的 shared_ptr 机制导致崩溃
+    FLAC::Picture *pic = nullptr;
+    {
+        const List<FLAC::Picture *> pics = tag->pictureList();
+        if (index < 0 || index >= (NSInteger)pics.size()) return NO;
+        
+        auto it = pics.cbegin();
+        std::advance(it, index);
+        pic = *it;
+    }
     
-    auto it = pics.begin();
-    std::advance(it, index);
-    tag->removePicture(*it, true);
+    tag->removePicture(pic, true);
     return YES;
 }
 
