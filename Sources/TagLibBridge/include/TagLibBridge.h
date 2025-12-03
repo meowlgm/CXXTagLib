@@ -58,8 +58,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *album;
 @property (nonatomic, copy, nullable) NSString *comment;
 @property (nonatomic, copy, nullable) NSString *genre;
-@property (nonatomic, assign) NSInteger year;
-@property (nonatomic, assign) NSInteger track;
+@property (nonatomic, copy, nullable) NSString *year;   // e.g. "2024" or "2024-01-15"
+@property (nonatomic, copy, nullable) NSString *track;  // e.g. "1" or "1/12"
 
 // MARK: - Extended Tags (via PropertyMap)
 

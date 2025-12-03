@@ -90,8 +90,8 @@ file.save()  // 保存所有更改
 | `album` | `String?` | 专辑 |
 | `comment` | `String?` | 注释 |
 | `genre` | `String?` | 流派 |
-| `year` | `Int?` | 年份 |
-| `track` | `Int?` | 音轨号 |
+| `year` | `String?` | 年份或日期，如 "2024" 或 "2024-01-15" |
+| `track` | `String?` | 音轨号，如 "1" 或 "1/12" |
 
 ```swift
 // 读取
@@ -99,7 +99,8 @@ let title = file.title
 
 // 设置
 file.title = "新标题"
-file.year = 2024
+file.year = "2024"
+file.track = "1"         // 或 "1/12" (含总数)
 file.save()  // 保存更改
 ```
 
@@ -112,7 +113,7 @@ file.save()  // 保存更改
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `albumArtist` | `String?` | 专辑艺术家 |
-| `discNumber` | `Int?` | 碟片号 |
+| `discNumber` | `String?` | 碟片号，如 "1" 或 "1/2" (含总数) |
 | `subtitle` | `String?` | 副标题 |
 | `date` | `String?` | 发行日期 |
 | `originalDate` | `String?` | 原始发行日期 |

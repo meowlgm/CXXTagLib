@@ -291,32 +291,20 @@ static int pictureTypeFromString(NSString *str) {
     tag->setGenre(genre ? tagLibStringFromNSString(genre) : String());
 }
 
-- (NSInteger)year {
-    if (!self.isValid) return 0;
-    Tag *tag = _fileRef->tag();
-    if (!tag) return 0;
-    return tag->year();
+- (NSString *)year {
+    return [self propertyForKey:@"DATE"];
 }
 
-- (void)setYear:(NSInteger)year {
-    if (!self.isValid) return;
-    Tag *tag = _fileRef->tag();
-    if (!tag) return;
-    tag->setYear((unsigned int)year);
+- (void)setYear:(NSString *)year {
+    [self setProperty:year forKey:@"DATE"];
 }
 
-- (NSInteger)track {
-    if (!self.isValid) return 0;
-    Tag *tag = _fileRef->tag();
-    if (!tag) return 0;
-    return tag->track();
+- (NSString *)track {
+    return [self propertyForKey:@"TRACKNUMBER"];
 }
 
-- (void)setTrack:(NSInteger)track {
-    if (!self.isValid) return;
-    Tag *tag = _fileRef->tag();
-    if (!tag) return;
-    tag->setTrack((unsigned int)track);
+- (void)setTrack:(NSString *)track {
+    [self setProperty:track forKey:@"TRACKNUMBER"];
 }
 
 // MARK: - Extended Tags (PropertyMap)

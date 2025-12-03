@@ -50,14 +50,14 @@ final class TagLibSwiftTests: XCTestCase {
                 file.album = "测试专辑 Test Album"
                 file.comment = "这是测试注释 This is a test comment"
                 file.genre = "Pop"
-                file.track = index + 1
+                file.track = String(index + 1)
                 
                 // ==================== 扩展标签 - 专辑信息 ====================
                 print("Setting album info tags...")
                 file.albumArtist = "测试专辑艺术家 Test Album Artist"
-                file.discNumber = 1
+                file.discNumber = "1"
                 file.subtitle = "测试副标题 Test Subtitle"
-                file.year = 2024
+                file.year = "2024"
                 file.date = "2024-01-15"
                 file.originalDate = "2020-06-01"
                 
@@ -146,8 +146,8 @@ final class TagLibSwiftTests: XCTestCase {
                 XCTAssertEqual(verifyFile.title, "测试标题 Test Title", "Title mismatch")
                 XCTAssertEqual(verifyFile.artist, "测试艺术家 Test Artist", "Artist mismatch")
                 XCTAssertEqual(verifyFile.album, "测试专辑 Test Album", "Album mismatch")
-                XCTAssertEqual(verifyFile.year, 2024, "Year mismatch")
-                XCTAssertEqual(verifyFile.track, index + 1, "Track mismatch")
+                XCTAssertEqual(verifyFile.year, "2024", "Year mismatch")
+                XCTAssertEqual(verifyFile.track, String(index + 1), "Track mismatch")
                 
                 // 验证封面数量
                 let pictureCount = verifyFile.pictureCount

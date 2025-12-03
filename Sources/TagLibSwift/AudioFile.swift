@@ -71,22 +71,16 @@ public final class AudioFile {
         set { bridge.genre = newValue }
     }
     
-    /// Year (0 means not set)
-    public var year: Int? {
-        get { 
-            let value = bridge.year
-            return value == 0 ? nil : Int(value)
-        }
-        set { bridge.year = newValue ?? 0 }
+    /// Year or date (e.g. "2024" or "2024-01-15")
+    public var year: String? {
+        get { bridge.year?.isEmpty == false ? bridge.year : nil }
+        set { bridge.year = newValue }
     }
     
-    /// Track number (0 means not set)
-    public var track: Int? {
-        get { 
-            let value = bridge.track
-            return value == 0 ? nil : Int(value)
-        }
-        set { bridge.track = newValue ?? 0 }
+    /// Track number (e.g. "1" or "1/12")
+    public var track: String? {
+        get { bridge.track?.isEmpty == false ? bridge.track : nil }
+        set { bridge.track = newValue }
     }
     
     // MARK: - Extended Tags (via PropertyMap)
@@ -103,10 +97,10 @@ public final class AudioFile {
         set { setProperty("SUBTITLE", value: newValue) }
     }
     
-    /// Disc number
-    public var discNumber: Int? {
-        get { getProperty("DISCNUMBER").flatMap { Int($0) } }
-        set { setProperty("DISCNUMBER", value: newValue.map { String($0) }) }
+    /// Disc number (e.g. "1" or "1/2")
+    public var discNumber: String? {
+        get { getProperty("DISCNUMBER") }
+        set { setProperty("DISCNUMBER", value: newValue) }
     }
     
     /// Release date

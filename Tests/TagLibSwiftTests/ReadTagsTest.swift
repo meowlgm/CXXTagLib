@@ -36,8 +36,8 @@ final class ReadTagsTest: XCTestCase {
         print("ARTIST:      \(file.artist ?? "(nil)")")
         print("ALBUM:       \(file.album ?? "(nil)")")
         print("GENRE:       \(file.genre ?? "(nil)")")
-        print("YEAR:        \(file.year.map { String($0) } ?? "(nil)")")
-        print("TRACK:       \(file.track.map { String($0) } ?? "(nil)")")
+        print("YEAR:        \(file.year ?? "(nil)")")
+        print("TRACK:       \(file.track ?? "(nil)")")
         print("COMMENT:     \(file.comment ?? "(nil)")")
         
         print("\n========== 扩展标签 ==========")
@@ -46,7 +46,7 @@ final class ReadTagsTest: XCTestCase {
         print("LYRICIST:    \(file.lyricist ?? "(nil)")")
         print("CONDUCTOR:   \(file.conductor ?? "(nil)")")
         print("DATE:        \(file.date ?? "(nil)")")
-        print("DISCNUMBER:  \(file.discNumber.map { String($0) } ?? "(nil)")")
+        print("DISCNUMBER:  \(file.discNumber ?? "(nil)")")
         
         print("\n========== 所有 PropertyMap 键值 ==========")
         let allProps = file.allProperties()
