@@ -312,7 +312,7 @@ static int pictureTypeFromString(NSString *str) {
 // 支持 ID3v1 的格式：MPEG, FLAC, TrueAudio, APE, MPC, WavPack
 // 读取：优先 ID3v2，其次 ID3v1，最后其他格式原生标签
 // 写入：优先写 ID3v2，不支持则用原生标签
-// 删除：按优先顺序删除找到的那个
+// 删除：同时删除 ID3v2 和 ID3v1
 
 // 获取文件的 ID3v2 标签（不创建）
 - (ID3v2::Tag *)getID3v2TagForRead:(File *)file {
@@ -475,21 +475,30 @@ static int pictureTypeFromString(NSString *str) {
                 id3v2->setProperties(props);
             }
         } else {
-            // 删除：先看 ID3v2
-            if (ID3v2::Tag *id3v2 = [self getID3v2TagForRead:file]) {
+            // 删除：同时删除 ID3v2 和 ID3v1
+            if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
                 PropertyMap props = id3v2->properties();
                 if (props.contains(tagKey)) {
                     props.erase(tagKey);
                     id3v2->setProperties(props);
-                    return;
                 }
             }
-            // 再看 ID3v1
             if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-                PropertyMap props = id3v1->properties();
-                if (props.contains(tagKey)) {
-                    props.erase(tagKey);
-                    id3v1->setProperties(props);
+                // ID3v1 固定字段需要直接设置
+                if (tagKey == String("TRACKNUMBER")) {
+                    id3v1->setTrack(0);
+                } else if (tagKey == String("DATE")) {
+                    id3v1->setYear(0);
+                } else if (tagKey == String("TITLE")) {
+                    id3v1->setTitle(String());
+                } else if (tagKey == String("ARTIST")) {
+                    id3v1->setArtist(String());
+                } else if (tagKey == String("ALBUM")) {
+                    id3v1->setAlbum(String());
+                } else if (tagKey == String("COMMENT")) {
+                    id3v1->setComment(String());
+                } else if (tagKey == String("GENRE")) {
+                    id3v1->setGenre(String());
                 }
             }
         }
