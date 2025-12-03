@@ -352,6 +352,30 @@ public final class AudioFile {
         bridge.setProperty(value, forKey: key)
     }
     
+    /// Remove a property from all tag formats (ID3v2, ID3v1, APE, Xiph, MP4, ASF, etc.)
+    /// Note: You must call save() after this to persist changes
+    public func removeProperty(_ key: String) {
+        bridge.setProperty(nil, forKey: key)
+    }
+    
+    /// Remove multiple properties from all tag formats
+    /// Note: You must call save() after this to persist changes
+    public func removeProperties(_ keys: [String]) {
+        for key in keys {
+            bridge.setProperty(nil, forKey: key)
+        }
+    }
+    
+    /// Remove properties matching a predicate from all tag formats
+    /// Note: You must call save() after this to persist changes
+    public func removeProperties(where predicate: (String) -> Bool) {
+        for key in allPropertyKeys() {
+            if predicate(key) {
+                bridge.setProperty(nil, forKey: key)
+            }
+        }
+    }
+    
     /// Get all property keys present in the file
     public func allPropertyKeys() -> [String] {
         return bridge.allPropertyKeys()

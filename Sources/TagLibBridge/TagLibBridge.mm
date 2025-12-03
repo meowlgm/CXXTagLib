@@ -21,6 +21,10 @@
 #include <taglib/asffile.h>
 #include <taglib/dsffile.h>
 #include <taglib/dsdifffile.h>
+#include <taglib/modfile.h>
+#include <taglib/s3mfile.h>
+#include <taglib/itfile.h>
+#include <taglib/xmfile.h>
 
 // Tag types
 #include <taglib/id3v1tag.h>
@@ -29,6 +33,8 @@
 #include <taglib/xiphcomment.h>
 #include <taglib/mp4tag.h>
 #include <taglib/asftag.h>
+#include <taglib/infotag.h>
+#include <taglib/dsdiffdiintag.h>
 
 // Picture/cover types
 #include <taglib/attachedpictureframe.h>
@@ -201,6 +207,23 @@ static int pictureTypeFromString(NSString *str) {
     if (dynamic_cast<MPEG::File *>(file)) return @"MPEG";
     if (dynamic_cast<FLAC::File *>(file)) return @"FLAC";
     if (dynamic_cast<MP4::File *>(file)) return @"MP4";
+    if (dynamic_cast<Ogg::Vorbis::File *>(file)) return @"Ogg Vorbis";
+    if (dynamic_cast<Ogg::Opus::File *>(file)) return @"Opus";
+    if (dynamic_cast<Ogg::Speex::File *>(file)) return @"Speex";
+    if (dynamic_cast<Ogg::FLAC::File *>(file)) return @"Ogg FLAC";
+    if (dynamic_cast<ASF::File *>(file)) return @"ASF";
+    if (dynamic_cast<APE::File *>(file)) return @"APE";
+    if (dynamic_cast<WavPack::File *>(file)) return @"WavPack";
+    if (dynamic_cast<MPC::File *>(file)) return @"MPC";
+    if (dynamic_cast<TrueAudio::File *>(file)) return @"TrueAudio";
+    if (dynamic_cast<RIFF::WAV::File *>(file)) return @"WAV";
+    if (dynamic_cast<RIFF::AIFF::File *>(file)) return @"AIFF";
+    if (dynamic_cast<DSF::File *>(file)) return @"DSF";
+    if (dynamic_cast<DSDIFF::File *>(file)) return @"DSDIFF";
+    if (dynamic_cast<Mod::File *>(file)) return @"MOD";
+    if (dynamic_cast<S3M::File *>(file)) return @"S3M";
+    if (dynamic_cast<IT::File *>(file)) return @"IT";
+    if (dynamic_cast<XM::File *>(file)) return @"XM";
     
     return @"Unknown";
 }
@@ -308,11 +331,9 @@ static int pictureTypeFromString(NSString *str) {
 }
 
 // MARK: - Extended Tags (PropertyMap)
-// 支持 ID3v2 的格式：MPEG, FLAC, WAV, AIFF, DSF, DSDIFF, TrueAudio
-// 支持 ID3v1 的格式：MPEG, FLAC, TrueAudio, APE, MPC, WavPack
-// 读取：优先 ID3v2，其次 ID3v1，最后其他格式原生标签
-// 写入：优先写 ID3v2，不支持则用原生标签
-// 删除：同时删除 ID3v2 和 ID3v1
+// 读取：使用 file->properties() 获取合并后的属性
+// 写入：使用 file->setProperties() 让 TagLib 自动处理多标签同步
+// 删除：遍历所有存在的标签类型逐一删除
 
 // 获取文件的 ID3v2 标签（不创建）
 - (ID3v2::Tag *)getID3v2TagForRead:(File *)file {
@@ -428,26 +449,7 @@ static int pictureTypeFromString(NSString *str) {
     
     String tagKey = tagLibStringFromNSString(key);
     
-    // 支持 ID3v2 的格式：优先 ID3v2
-    if ([self supportsID3v2:file]) {
-        // 先查 ID3v2
-        if (ID3v2::Tag *id3v2 = [self getID3v2TagForRead:file]) {
-            PropertyMap props = id3v2->properties();
-            if (props.contains(tagKey) && !props[tagKey].isEmpty()) {
-                return stringFromTagLibString(props[tagKey].front());
-            }
-        }
-        // 再查 ID3v1（仅 MPEG 和 TrueAudio）
-        if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-            PropertyMap props = id3v1->properties();
-            if (props.contains(tagKey) && !props[tagKey].isEmpty()) {
-                return stringFromTagLibString(props[tagKey].front());
-            }
-        }
-        return nil;
-    }
-    
-    // 其他格式：使用默认 PropertyMap（FLAC, MP4, Ogg, APE, WMA 等）
+    // 使用 file->properties() 获取合并后的属性（TagLib 会处理优先级）
     PropertyMap props = file->properties();
     if (props.contains(tagKey) && !props[tagKey].isEmpty()) {
         return stringFromTagLibString(props[tagKey].front());
@@ -463,56 +465,117 @@ static int pictureTypeFromString(NSString *str) {
     
     String tagKey = tagLibStringFromNSString(key);
     
-    // 支持 ID3v2 的格式：写入 ID3v2，删除按优先顺序
-    if ([self supportsID3v2:file]) {
-        if (value) {
-            // 写入：总是写 ID3v2
-            if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
-                PropertyMap props = id3v2->properties();
-                StringList values;
-                values.append(tagLibStringFromNSString(value));
-                props[tagKey] = values;
-                id3v2->setProperties(props);
-            }
-        } else {
-            // 删除：同时删除 ID3v2 和 ID3v1
-            if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
-                PropertyMap props = id3v2->properties();
-                if (props.contains(tagKey)) {
-                    props.erase(tagKey);
-                    id3v2->setProperties(props);
-                }
-            }
-            if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-                // ID3v1 固定字段需要直接设置
-                if (tagKey == String("TRACKNUMBER")) {
-                    id3v1->setTrack(0);
-                } else if (tagKey == String("DATE")) {
-                    id3v1->setYear(0);
-                } else if (tagKey == String("TITLE")) {
-                    id3v1->setTitle(String());
-                } else if (tagKey == String("ARTIST")) {
-                    id3v1->setArtist(String());
-                } else if (tagKey == String("ALBUM")) {
-                    id3v1->setAlbum(String());
-                } else if (tagKey == String("COMMENT")) {
-                    id3v1->setComment(String());
-                } else if (tagKey == String("GENRE")) {
-                    id3v1->setGenre(String());
-                }
-            }
-        }
-        return;
-    }
-    
-    // 其他格式：使用默认 PropertyMap
-    PropertyMap props = file->properties();
     if (value) {
+        // 设置：使用 file->setProperties()，TagLib 会自动处理多标签同步
+        PropertyMap props = file->properties();
         StringList values;
         values.append(tagLibStringFromNSString(value));
         props[tagKey] = values;
         file->setProperties(props);
     } else {
+        // 删除：需要遍历所有存在的标签类型
+        [self removePropertyFromAllTags:tagKey file:file];
+    }
+}
+
+// 从所有标签格式中删除指定属性
+- (void)removePropertyFromAllTags:(const String &)tagKey file:(File *)file {
+    // ID3v2
+    if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
+        PropertyMap props = id3v2->properties();
+        if (props.contains(tagKey)) {
+            props.erase(tagKey);
+            id3v2->setProperties(props);
+        }
+    }
+    
+    // ID3v1 (固定字段需要特殊处理)
+    if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
+        if (tagKey == String("TRACKNUMBER")) {
+            id3v1->setTrack(0);
+        } else if (tagKey == String("DATE")) {
+            id3v1->setYear(0);
+        } else if (tagKey == String("TITLE")) {
+            id3v1->setTitle(String());
+        } else if (tagKey == String("ARTIST")) {
+            id3v1->setArtist(String());
+        } else if (tagKey == String("ALBUM")) {
+            id3v1->setAlbum(String());
+        } else if (tagKey == String("COMMENT")) {
+            id3v1->setComment(String());
+        } else if (tagKey == String("GENRE")) {
+            id3v1->setGenre(String());
+        }
+    }
+    
+    // APE Tag (MPEG/APE/MPC/WavPack)
+    if (APE::Tag *ape = [self apeTagFromFile:file]) {
+        PropertyMap props = ape->properties();
+        if (props.contains(tagKey)) {
+            props.erase(tagKey);
+            ape->setProperties(props);
+        }
+    }
+    
+    // Xiph Comment (FLAC/Ogg/Opus/Speex)
+    if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+        PropertyMap props = xiph->properties();
+        if (props.contains(tagKey)) {
+            props.erase(tagKey);
+            xiph->setProperties(props);
+        }
+    }
+    
+    // MP4 Tag
+    if (auto *mp4File = dynamic_cast<MP4::File *>(file)) {
+        if (MP4::Tag *tag = mp4File->tag()) {
+            PropertyMap props = tag->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                tag->setProperties(props);
+            }
+        }
+    }
+    
+    // ASF Tag (WMA)
+    if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
+        if (ASF::Tag *tag = asfFile->tag()) {
+            PropertyMap props = tag->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                tag->setProperties(props);
+            }
+        }
+    }
+    
+    // WAV InfoTag (RIFF INFO)
+    if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+        if (RIFF::Info::Tag *tag = wavFile->InfoTag()) {
+            PropertyMap props = tag->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                tag->setProperties(props);
+            }
+        }
+    }
+    
+    // DSDIFF DIIN Tag
+    if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
+        if (DSDIFF::DIIN::Tag *tag = dsdiffFile->DIINTag()) {
+            PropertyMap props = tag->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                tag->setProperties(props);
+            }
+        }
+    }
+    
+    // Mod/S3M/IT/XM (Mod::Tag) - 这些格式标签有限，直接用 file->setProperties
+    if (dynamic_cast<Mod::File *>(file) ||
+        dynamic_cast<S3M::File *>(file) ||
+        dynamic_cast<IT::File *>(file) ||
+        dynamic_cast<XM::File *>(file)) {
+        PropertyMap props = file->properties();
         if (props.contains(tagKey)) {
             props.erase(tagKey);
             file->setProperties(props);
@@ -526,26 +589,7 @@ static int pictureTypeFromString(NSString *str) {
     File *file = _fileRef->file();
     if (!file) return @[];
     
-    // 支持 ID3v2 的格式：合并 ID3v2 和 ID3v1 的 keys
-    if ([self supportsID3v2:file]) {
-        NSMutableSet<NSString *> *keySet = [NSMutableSet set];
-        
-        if (ID3v2::Tag *id3v2 = [self getID3v2TagForRead:file]) {
-            PropertyMap props = id3v2->properties();
-            for (auto it = props.begin(); it != props.end(); ++it) {
-                [keySet addObject:stringFromTagLibString(it->first)];
-            }
-        }
-        if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-            PropertyMap props = id3v1->properties();
-            for (auto it = props.begin(); it != props.end(); ++it) {
-                [keySet addObject:stringFromTagLibString(it->first)];
-            }
-        }
-        return [keySet allObjects];
-    }
-    
-    // 其他格式
+    // 使用 file->properties() 获取所有属性键（TagLib 会合并所有标签）
     PropertyMap props = file->properties();
     NSMutableArray<NSString *> *keys = [NSMutableArray array];
     for (auto it = props.begin(); it != props.end(); ++it) {
@@ -631,7 +675,29 @@ static int pictureTypeFromString(NSString *str) {
         return result;
     }
     
-    // WAV/AIFF/DSF/DSDIFF/TrueAudio (ID3v2-based)
+    // WAV: ID3v2 + InfoTag
+    if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+        if (ID3v2::Tag *tag = wavFile->ID3v2Tag()) {
+            addProps(tag->properties(), @"ID3v2");
+        }
+        if (RIFF::Info::Tag *tag = wavFile->InfoTag()) {
+            addProps(tag->properties(), @"InfoTag");
+        }
+        return result;
+    }
+    
+    // DSDIFF: ID3v2 + DIIN
+    if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
+        if (ID3v2::Tag *tag = dsdiffFile->ID3v2Tag(false)) {
+            addProps(tag->properties(), @"ID3v2");
+        }
+        if (DSDIFF::DIIN::Tag *tag = dsdiffFile->DIINTag()) {
+            addProps(tag->properties(), @"DIIN");
+        }
+        return result;
+    }
+    
+    // AIFF/DSF/TrueAudio (ID3v2-based)
     if (ID3v2::Tag *id3v2 = [self getID3v2TagForRead:file]) {
         addProps(id3v2->properties(), @"ID3v2");
         if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
@@ -747,6 +813,9 @@ static int pictureTypeFromString(NSString *str) {
         if (dsdiffFile->ID3v2Tag(false)) {
             dsdiffFile->ID3v2Tag()->setProperties({});
         }
+        if (dsdiffFile->DIINTag()) {
+            dsdiffFile->DIINTag()->setProperties({});
+        }
         return YES;
     }
     
@@ -811,7 +880,7 @@ static int pictureTypeFromString(NSString *str) {
     if (!self.isValid) return;
     
     if (rating < 0) {
-        // Remove POPM frame
+        // Remove POPM frame from all supported formats
         File *file = _fileRef->file();
         if (!file) return;
         
@@ -820,6 +889,16 @@ static int pictureTypeFromString(NSString *str) {
             id3v2Tag = mpegFile->ID3v2Tag(false);
         } else if (auto *flacFile = dynamic_cast<FLAC::File *>(file)) {
             id3v2Tag = flacFile->ID3v2Tag(false);
+        } else if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+            id3v2Tag = wavFile->ID3v2Tag();
+        } else if (auto *aiffFile = dynamic_cast<RIFF::AIFF::File *>(file)) {
+            id3v2Tag = dynamic_cast<ID3v2::Tag *>(aiffFile->tag());
+        } else if (auto *dsfFile = dynamic_cast<DSF::File *>(file)) {
+            id3v2Tag = dsfFile->tag();
+        } else if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
+            id3v2Tag = dsdiffFile->ID3v2Tag(false);
+        } else if (auto *ttaFile = dynamic_cast<TrueAudio::File *>(file)) {
+            id3v2Tag = ttaFile->ID3v2Tag(false);
         }
         
         if (id3v2Tag) {
@@ -1026,6 +1105,11 @@ static int pictureTypeFromString(NSString *str) {
 // MARK: - Picture Operations for Ogg/Xiph Comment (Vorbis, Opus, Speex, Ogg FLAC)
 
 - (Ogg::XiphComment *)xiphCommentFromFile:(File *)file {
+    // FLAC (独立文件)
+    if (auto *flac = dynamic_cast<FLAC::File *>(file)) {
+        return flac->xiphComment();
+    }
+    // Ogg 容器
     if (auto *vorbis = dynamic_cast<Ogg::Vorbis::File *>(file)) {
         return vorbis->tag();
     }

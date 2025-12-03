@@ -245,12 +245,15 @@ for prop in rawProps {
 
 | 来源 | 说明 |
 |------|------|
-| `ID3v2` | ID3v2 标签（MP3, FLAC, WAV 等）|
-| `ID3v1` | ID3v1 标签（MP3, FLAC 等）|
-| `Xiph` | Xiph/Vorbis Comment（FLAC, Ogg）|
-| `MP4` | MP4 标签（M4A, AAC）|
+| `ID3v2` | ID3v2 标签（MP3, FLAC, WAV, AIFF, DSF, DSDIFF, TrueAudio）|
+| `ID3v1` | ID3v1 标签（MP3, FLAC, APE, MPC, WavPack, TrueAudio）|
+| `Xiph` | Xiph/Vorbis Comment（FLAC, Ogg Vorbis, Opus, Speex）|
+| `MP4` | MP4 标签（M4A, AAC, ALAC）|
 | `APE` | APE 标签（APE, WavPack, MPC）|
-| `ASF` | ASF 标签（WMA）|
+| `ASF` | ASF 标签（WMA, WMV）|
+| `InfoTag` | RIFF INFO 标签（WAV）|
+| `DIIN` | DSDIFF DIIN 标签（DFF）|
+| `Default` | 其他格式的默认标签 |
 
 ### 读写单个属性
 
@@ -260,10 +263,24 @@ let value = file.getProperty("CUSTOM_TAG")
 
 // 设置
 file.setProperty("CUSTOM_TAG", value: "自定义值")
-
-// 删除
-file.setProperty("CUSTOM_TAG", value: nil)
 ```
+
+### 删除属性
+
+```swift
+// 删除单个属性（从所有标签格式中删除）
+file.removeProperty("CUSTOM_TAG")
+
+// 删除多个属性
+file.removeProperties(["TAG1", "TAG2", "TAG3"])
+
+// 按条件删除（如删除所有 MUSICBRAINZ 开头的标签）
+file.removeProperties { $0.hasPrefix("MUSICBRAINZ") }
+
+file.save()  // 需要保存才生效
+```
+
+> **注意**：删除操作会遍历文件中所有存在的标签格式（ID3v2, ID3v1, APE, Xiph, MP4, ASF, InfoTag, DIIN 等），确保彻底删除。
 
 ### 清除所有标签
 
@@ -483,15 +500,15 @@ do {
 4. **保存**：修改后需调用 `save()` 才会写入文件
 5. **内存管理**：`AudioFile` 对象释放时会自动关闭文件
 
-## 标签优先级
+## 标签处理策略
 
-对于支持多种标签格式的文件（如 MP3），本库按以下优先级处理：
+对于支持多种标签格式的文件（如 MP3），本库按以下策略处理：
 
-| 操作 | 优先级 |
+| 操作 | 策略 |
 |------|--------|
-| 读取 | ID3v2 → ID3v1 → 其他 |
-| 写入 | 优先写入 ID3v2（支持的格式）|
-| 删除 | 按优先级删除找到的那个 |
+| 读取 | 使用 TagLib 合并后的属性 |
+| 写入 | 使用 TagLib 自动同步到各标签格式 |
+| 删除 | **遍历所有存在的标签格式，逐一删除** |
 
 **各格式的标签类型**：
 
@@ -499,11 +516,16 @@ do {
 |------|---------------|
 | MP3 | ID3v2, ID3v1, APE |
 | FLAC | Xiph Comment, ID3v2, ID3v1 |
-| M4A/AAC | MP4 Tag |
-| Ogg | Xiph Comment |
+| M4A/AAC/ALAC | MP4 Tag |
+| Ogg Vorbis/Opus/Speex | Xiph Comment |
 | WMA | ASF Tag |
 | APE/WavPack/MPC | APE Tag, ID3v1 |
-| WAV/AIFF | ID3v2 |
+| WAV | ID3v2, InfoTag (RIFF INFO) |
+| AIFF | ID3v2 |
+| DSF | ID3v2 |
+| DSDIFF | ID3v2, DIIN Tag |
+| TrueAudio | ID3v2, ID3v1 |
+| MOD/S3M/IT/XM | Mod Tag |
 
 ## 许可证
 
