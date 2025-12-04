@@ -478,14 +478,20 @@ static int pictureTypeFromString(NSString *str) {
     }
 }
 
-// 从所有标签格式中删除指定属性
+// 从所有标签格式中删除指定属性（包括非标准属性）
 - (void)removePropertyFromAllTags:(const String &)tagKey file:(File *)file {
     // ID3v2
     if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
+        // 先尝试通过 properties 删除标准属性
         PropertyMap props = id3v2->properties();
         if (props.contains(tagKey)) {
             props.erase(tagKey);
             id3v2->setProperties(props);
+        }
+        // 再尝试直接删除帧（处理非标准帧，如 APIC 等）
+        ByteVector frameId = tagKey.data(String::Latin1);
+        if (frameId.size() == 4) {
+            id3v2->removeFrames(frameId);
         }
     }
     
@@ -510,41 +516,49 @@ static int pictureTypeFromString(NSString *str) {
     
     // APE Tag (MPEG/APE/MPC/WavPack)
     if (APE::Tag *ape = [self apeTagFromFile:file]) {
+        // 先尝试通过 properties 删除
         PropertyMap props = ape->properties();
         if (props.contains(tagKey)) {
             props.erase(tagKey);
             ape->setProperties(props);
         }
+        // 再尝试直接通过 itemListMap 删除（处理非标准项）
+        ape->removeItem(tagKey);
     }
     
     // Xiph Comment (FLAC/Ogg/Opus/Speex)
     if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
-        PropertyMap props = xiph->properties();
-        if (props.contains(tagKey)) {
-            props.erase(tagKey);
-            xiph->setProperties(props);
-        }
+        // Xiph Comment 的 properties() 已包含所有字段
+        // 使用 removeFields 确保删除（包括非标准字段）
+        xiph->removeFields(tagKey);
     }
     
     // MP4 Tag
     if (auto *mp4File = dynamic_cast<MP4::File *>(file)) {
         if (MP4::Tag *tag = mp4File->tag()) {
+            // 先尝试通过 properties 删除标准属性
             PropertyMap props = tag->properties();
             if (props.contains(tagKey)) {
                 props.erase(tagKey);
                 tag->setProperties(props);
             }
+            // 再尝试直接从 itemMap 删除（处理非标准项如 ©ART, ©alb 等）
+            MP4::ItemMap &items = const_cast<MP4::ItemMap &>(tag->itemMap());
+            items.erase(tagKey);
         }
     }
     
     // ASF Tag (WMA)
     if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
         if (ASF::Tag *tag = asfFile->tag()) {
+            // 先尝试通过 properties 删除标准属性
             PropertyMap props = tag->properties();
             if (props.contains(tagKey)) {
                 props.erase(tagKey);
                 tag->setProperties(props);
             }
+            // 再尝试直接从 attributeListMap 删除（处理非标准属性）
+            tag->removeItem(tagKey);
         }
     }
     
