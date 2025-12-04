@@ -394,7 +394,20 @@ public final class AudioFile {
     
     /// Raw property entry with source information
     public struct RawProperty {
-        public let source: String  // "ID3v2", "ID3v1", "Default", etc.
+        /// Tag format source:
+        /// - "ID3v2" - ID3v2 tag (MP3, FLAC, WAV, AIFF, DSF, DSDIFF, TrueAudio)
+        /// - "ID3v1" - ID3v1 tag (MP3, FLAC, APE, MPC, WavPack, TrueAudio)
+        /// - "Vorbis Comment" - Vorbis Comment (FLAC, Ogg Vorbis)
+        /// - "Opus" - Opus tag (Opus files)
+        /// - "Speex" - Speex tag (Speex files)
+        /// - "Ogg FLAC" - Ogg FLAC tag (Ogg FLAC files)
+        /// - "APE" - APE tag (APE, MPC, WavPack, MP3)
+        /// - "MP4" - MP4/M4A tag
+        /// - "ASF" - ASF/WMA tag
+        /// - "InfoTag" - RIFF INFO tag (WAV)
+        /// - "DIIN" - DSDIFF DIIN tag
+        /// - "MOD" - Tracker module tag (MOD/S3M/IT/XM)
+        public let source: String
         public let key: String
         public let value: String
     }

@@ -629,10 +629,10 @@ static int pictureTypeFromString(NSString *str) {
         return result;
     }
     
-    // FLAC: Xiph Comment, ID3v2, ID3v1
+    // FLAC: Vorbis Comment, ID3v2, ID3v1
     if (auto *flacFile = dynamic_cast<FLAC::File *>(file)) {
         if (Ogg::XiphComment *tag = flacFile->xiphComment(false)) {
-            addProps(tag->properties(), @"Xiph");
+            addProps(tag->properties(), @"Vorbis Comment");
         }
         if (ID3v2::Tag *tag = flacFile->ID3v2Tag(false)) {
             addProps(tag->properties(), @"ID3v2");
@@ -651,9 +651,35 @@ static int pictureTypeFromString(NSString *str) {
         return result;
     }
     
-    // Ogg Vorbis/Opus/Speex/FLAC
-    if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
-        addProps(xiph->properties(), @"Xiph");
+    // Ogg Vorbis
+    if (dynamic_cast<Ogg::Vorbis::File *>(file)) {
+        if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+            addProps(xiph->properties(), @"Vorbis Comment");
+        }
+        return result;
+    }
+    
+    // Opus
+    if (dynamic_cast<Ogg::Opus::File *>(file)) {
+        if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+            addProps(xiph->properties(), @"Opus");
+        }
+        return result;
+    }
+    
+    // Speex
+    if (dynamic_cast<Ogg::Speex::File *>(file)) {
+        if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+            addProps(xiph->properties(), @"Speex");
+        }
+        return result;
+    }
+    
+    // Ogg FLAC
+    if (dynamic_cast<Ogg::FLAC::File *>(file)) {
+        if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+            addProps(xiph->properties(), @"Ogg FLAC");
+        }
         return result;
     }
     
