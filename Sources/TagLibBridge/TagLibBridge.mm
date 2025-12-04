@@ -615,16 +615,70 @@ static int pictureTypeFromString(NSString *str) {
         }
     };
     
+    // Helper to check if a key already exists in result
+    auto keyExists = [&result](NSString *key) -> bool {
+        for (NSDictionary *dict in result) {
+            if ([dict[@"key"] isEqualToString:key]) {
+                return true;
+            }
+        }
+        return false;
+    };
+    
+    // Helper to add raw ID3v2 frames (including non-standard)
+    auto addID3v2Raw = [&result, &keyExists](ID3v2::Tag *tag, NSString *source) {
+        const ID3v2::FrameListMap &frameMap = tag->frameListMap();
+        for (auto it = frameMap.begin(); it != frameMap.end(); ++it) {
+            NSString *frameId = [NSString stringWithUTF8String:it->first.data()];
+            for (const auto &frame : it->second) {
+                NSString *value = stringFromTagLibString(frame->toString());
+                if (value.length > 0 && !keyExists(frameId)) {
+                    [result addObject:@{@"source": source, @"key": frameId, @"value": value}];
+                }
+            }
+        }
+    };
+    
+    // Helper to add raw APE items (including non-standard)
+    auto addAPERaw = [&result, &keyExists](APE::Tag *tag, NSString *source) {
+        const APE::ItemListMap &itemMap = tag->itemListMap();
+        for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
+            NSString *key = stringFromTagLibString(it->first);
+            if (it->second.type() == APE::Item::Text) {
+                NSString *value = stringFromTagLibString(it->second.toString());
+                if (value.length > 0 && !keyExists(key)) {
+                    [result addObject:@{@"source": source, @"key": key, @"value": value}];
+                }
+            }
+        }
+    };
+    
+    // Helper to add raw MP4 items (including non-standard)
+    auto addMP4Raw = [&result, &keyExists](MP4::Tag *tag, NSString *source) {
+        const MP4::ItemMap &itemMap = tag->itemMap();
+        for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
+            NSString *key = stringFromTagLibString(it->first);
+            if (it->second.isValid()) {
+                NSString *value = stringFromTagLibString(it->second.toStringList().toString());
+                if (value.length > 0 && !keyExists(key)) {
+                    [result addObject:@{@"source": source, @"key": key, @"value": value}];
+                }
+            }
+        }
+    };
+    
     // MPEG (MP3): ID3v2, ID3v1, APE
     if (auto *mpegFile = dynamic_cast<MPEG::File *>(file)) {
         if (ID3v2::Tag *tag = mpegFile->ID3v2Tag(false)) {
             addProps(tag->properties(), @"ID3v2");
+            addID3v2Raw(tag, @"ID3v2");
         }
         if (ID3v1::Tag *tag = mpegFile->ID3v1Tag()) {
             addProps(tag->properties(), @"ID3v1");
         }
         if (APE::Tag *tag = mpegFile->APETag(false)) {
             addProps(tag->properties(), @"APE");
+            addAPERaw(tag, @"APE");
         }
         return result;
     }
@@ -632,10 +686,12 @@ static int pictureTypeFromString(NSString *str) {
     // FLAC: Vorbis Comment, ID3v2, ID3v1
     if (auto *flacFile = dynamic_cast<FLAC::File *>(file)) {
         if (Ogg::XiphComment *tag = flacFile->xiphComment(false)) {
+            // Xiph Comment's properties() already returns all fields
             addProps(tag->properties(), @"Vorbis Comment");
         }
         if (ID3v2::Tag *tag = flacFile->ID3v2Tag(false)) {
             addProps(tag->properties(), @"ID3v2");
+            addID3v2Raw(tag, @"ID3v2");
         }
         if (ID3v1::Tag *tag = flacFile->ID3v1Tag()) {
             addProps(tag->properties(), @"ID3v1");
@@ -647,6 +703,7 @@ static int pictureTypeFromString(NSString *str) {
     if (auto *mp4File = dynamic_cast<MP4::File *>(file)) {
         if (MP4::Tag *tag = mp4File->tag()) {
             addProps(tag->properties(), @"MP4");
+            addMP4Raw(tag, @"MP4");
         }
         return result;
     }
@@ -686,7 +743,28 @@ static int pictureTypeFromString(NSString *str) {
     // ASF/WMA
     if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
         if (ASF::Tag *tag = asfFile->tag()) {
+            // 先添加标准属性
             addProps(tag->properties(), @"ASF");
+            
+            // 再添加非标准属性（直接从 attributeListMap 获取）
+            const ASF::AttributeListMap &attrs = tag->attributeListMap();
+            for (auto it = attrs.begin(); it != attrs.end(); ++it) {
+                NSString *key = stringFromTagLibString(it->first);
+                if (!it->second.isEmpty()) {
+                    NSString *value = stringFromTagLibString(it->second.front().toString());
+                    // 检查这个键是否已经在结果中（避免重复）
+                    bool alreadyAdded = false;
+                    for (NSDictionary *dict in result) {
+                        if ([dict[@"key"] isEqualToString:key]) {
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyAdded && value.length > 0) {
+                        [result addObject:@{@"source": @"ASF", @"key": key, @"value": value}];
+                    }
+                }
+            }
         }
         return result;
     }
@@ -694,6 +772,7 @@ static int pictureTypeFromString(NSString *str) {
     // APE/WavPack/MPC
     if (APE::Tag *ape = [self apeTagFromFile:file]) {
         addProps(ape->properties(), @"APE");
+        addAPERaw(ape, @"APE");
         // Also check ID3v1
         if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
             addProps(id3v1->properties(), @"ID3v1");
@@ -705,6 +784,7 @@ static int pictureTypeFromString(NSString *str) {
     if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
         if (ID3v2::Tag *tag = wavFile->ID3v2Tag()) {
             addProps(tag->properties(), @"ID3v2");
+            addID3v2Raw(tag, @"ID3v2");
         }
         if (RIFF::Info::Tag *tag = wavFile->InfoTag()) {
             addProps(tag->properties(), @"InfoTag");
@@ -716,6 +796,7 @@ static int pictureTypeFromString(NSString *str) {
     if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
         if (ID3v2::Tag *tag = dsdiffFile->ID3v2Tag(false)) {
             addProps(tag->properties(), @"ID3v2");
+            addID3v2Raw(tag, @"ID3v2");
         }
         if (DSDIFF::DIIN::Tag *tag = dsdiffFile->DIINTag()) {
             addProps(tag->properties(), @"DIIN");
@@ -726,14 +807,24 @@ static int pictureTypeFromString(NSString *str) {
     // AIFF/DSF/TrueAudio (ID3v2-based)
     if (ID3v2::Tag *id3v2 = [self getID3v2TagForRead:file]) {
         addProps(id3v2->properties(), @"ID3v2");
+        addID3v2Raw(id3v2, @"ID3v2");
         if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
             addProps(id3v1->properties(), @"ID3v1");
         }
         return result;
     }
     
-    // Fallback: use generic properties
-    addProps(file->properties(), @"Default");
+    // Tracker/MOD formats
+    if (dynamic_cast<Mod::File *>(file) ||
+        dynamic_cast<S3M::File *>(file) ||
+        dynamic_cast<IT::File *>(file) ||
+        dynamic_cast<XM::File *>(file)) {
+        addProps(file->properties(), @"MOD");
+        return result;
+    }
+    
+    // Fallback for unknown formats
+    addProps(file->properties(), @"Unknown");
     return result;
 }
 
