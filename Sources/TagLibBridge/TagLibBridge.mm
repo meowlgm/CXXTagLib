@@ -639,43 +639,51 @@ static int pictureTypeFromString(NSString *str) {
         return false;
     };
     
-    // Helper to add raw ID3v2 frames (including non-standard)
+    // Helper to add unsupported ID3v2 frames (truly non-standard ones)
     auto addID3v2Raw = [&result, &keyExists](ID3v2::Tag *tag, NSString *source) {
-        const ID3v2::FrameListMap &frameMap = tag->frameListMap();
-        for (auto it = frameMap.begin(); it != frameMap.end(); ++it) {
-            NSString *frameId = [NSString stringWithUTF8String:it->first.data()];
-            for (const auto &frame : it->second) {
+        PropertyMap props = tag->properties();
+        // unsupportedData() 返回 TagLib 无法映射的帧 ID
+        for (const auto &frameId : props.unsupportedData()) {
+            NSString *frameIdStr = stringFromTagLibString(frameId);
+            const ID3v2::FrameList &frames = tag->frameList(frameId.data(String::Latin1));
+            for (const auto &frame : frames) {
                 NSString *value = stringFromTagLibString(frame->toString());
-                if (value.length > 0 && !keyExists(frameId)) {
-                    [result addObject:@{@"source": source, @"key": frameId, @"value": value}];
+                if (value.length > 0 && !keyExists(frameIdStr)) {
+                    [result addObject:@{@"source": source, @"key": frameIdStr, @"value": value}];
                 }
             }
         }
     };
     
-    // Helper to add raw APE items (including non-standard)
+    // Helper to add unsupported APE items (truly non-standard ones)
     auto addAPERaw = [&result, &keyExists](APE::Tag *tag, NSString *source) {
-        const APE::ItemListMap &itemMap = tag->itemListMap();
-        for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
-            NSString *key = stringFromTagLibString(it->first);
-            if (it->second.type() == APE::Item::Text) {
-                NSString *value = stringFromTagLibString(it->second.toString());
-                if (value.length > 0 && !keyExists(key)) {
-                    [result addObject:@{@"source": source, @"key": key, @"value": value}];
+        PropertyMap props = tag->properties();
+        // unsupportedData() 返回 TagLib 无法映射的键
+        for (const auto &key : props.unsupportedData()) {
+            NSString *keyStr = stringFromTagLibString(key);
+            APE::Item item = tag->itemListMap().value(key);
+            if (item.type() == APE::Item::Text) {
+                NSString *value = stringFromTagLibString(item.toString());
+                if (value.length > 0 && !keyExists(keyStr)) {
+                    [result addObject:@{@"source": source, @"key": keyStr, @"value": value}];
                 }
             }
         }
     };
     
-    // Helper to add raw MP4 items (including non-standard)
+    // Helper to add unsupported MP4 items (truly non-standard ones)
     auto addMP4Raw = [&result, &keyExists](MP4::Tag *tag, NSString *source) {
-        const MP4::ItemMap &itemMap = tag->itemMap();
-        for (auto it = itemMap.begin(); it != itemMap.end(); ++it) {
-            NSString *key = stringFromTagLibString(it->first);
-            if (it->second.isValid()) {
-                NSString *value = stringFromTagLibString(it->second.toStringList().toString());
-                if (value.length > 0 && !keyExists(key)) {
-                    [result addObject:@{@"source": source, @"key": key, @"value": value}];
+        PropertyMap props = tag->properties();
+        // unsupportedData() 返回 TagLib 无法映射的键
+        for (const auto &key : props.unsupportedData()) {
+            NSString *keyStr = stringFromTagLibString(key);
+            if (tag->contains(key)) {
+                MP4::Item item = tag->item(key);
+                if (item.isValid()) {
+                    NSString *value = stringFromTagLibString(item.toStringList().toString());
+                    if (value.length > 0 && !keyExists(keyStr)) {
+                        [result addObject:@{@"source": source, @"key": keyStr, @"value": value}];
+                    }
                 }
             }
         }
@@ -758,24 +766,19 @@ static int pictureTypeFromString(NSString *str) {
     if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
         if (ASF::Tag *tag = asfFile->tag()) {
             // 先添加标准属性
-            addProps(tag->properties(), @"ASF");
+            PropertyMap props = tag->properties();
+            addProps(props, @"ASF");
             
-            // 再添加非标准属性（直接从 attributeListMap 获取）
-            const ASF::AttributeListMap &attrs = tag->attributeListMap();
-            for (auto it = attrs.begin(); it != attrs.end(); ++it) {
-                NSString *key = stringFromTagLibString(it->first);
-                if (!it->second.isEmpty()) {
-                    NSString *value = stringFromTagLibString(it->second.front().toString());
-                    // 检查这个键是否已经在结果中（避免重复）
-                    bool alreadyAdded = false;
-                    for (NSDictionary *dict in result) {
-                        if ([dict[@"key"] isEqualToString:key]) {
-                            alreadyAdded = true;
-                            break;
+            // 再添加 unsupportedData 中的非标准属性
+            for (const auto &key : props.unsupportedData()) {
+                NSString *keyStr = stringFromTagLibString(key);
+                if (tag->attributeListMap().contains(key)) {
+                    const ASF::AttributeList &attrs = tag->attributeListMap()[key];
+                    if (!attrs.isEmpty()) {
+                        NSString *value = stringFromTagLibString(attrs.front().toString());
+                        if (value.length > 0 && !keyExists(keyStr)) {
+                            [result addObject:@{@"source": @"ASF", @"key": keyStr, @"value": value}];
                         }
-                    }
-                    if (!alreadyAdded && value.length > 0) {
-                        [result addObject:@{@"source": @"ASF", @"key": key, @"value": value}];
                     }
                 }
             }
