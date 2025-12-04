@@ -769,6 +769,17 @@ static int pictureTypeFromString(NSString *str) {
             PropertyMap props = tag->properties();
             addProps(props, @"ASF");
             
+            // ASF Content Description 字段与标准键的映射
+            // 如果非标准键与标准键值相同，则跳过（避免重复）
+            auto valueForKey = [&result](NSString *key) -> NSString * {
+                for (NSDictionary *dict in result) {
+                    if ([dict[@"key"] isEqualToString:key]) {
+                        return dict[@"value"];
+                    }
+                }
+                return nil;
+            };
+            
             // 再添加 unsupportedData 中的非标准属性
             for (const auto &key : props.unsupportedData()) {
                 NSString *keyStr = stringFromTagLibString(key);
@@ -776,9 +787,16 @@ static int pictureTypeFromString(NSString *str) {
                     const ASF::AttributeList &attrs = tag->attributeListMap()[key];
                     if (!attrs.isEmpty()) {
                         NSString *value = stringFromTagLibString(attrs.front().toString());
-                        if (value.length > 0 && !keyExists(keyStr)) {
-                            [result addObject:@{@"source": @"ASF", @"key": keyStr, @"value": value}];
+                        if (value.length == 0 || keyExists(keyStr)) {
+                            continue;
                         }
+                        // 检查是否与标准键值相同（避免 title/TITLE 重复）
+                        NSString *upperKey = [keyStr uppercaseString];
+                        NSString *stdValue = valueForKey(upperKey);
+                        if (stdValue && [stdValue isEqualToString:value]) {
+                            continue; // 值相同，跳过
+                        }
+                        [result addObject:@{@"source": @"ASF", @"key": keyStr, @"value": value}];
                     }
                 }
             }
