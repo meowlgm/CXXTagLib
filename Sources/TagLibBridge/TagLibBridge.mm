@@ -1766,11 +1766,19 @@ static int pictureTypeFromString(NSString *str) {
     File *file = _fileRef->file();
     if (!file) return NO;
     
-    // WAV 文件特殊处理：只保存 ID3v2，不保存 InfoTag
+    // WAV 文件特殊处理：InfoTag 中的非 Latin1 字符会导致乱码
     // 因为 TagLib 的 InfoTag 使用 UTF-8 编码，不符合 RIFF INFO 规范（应为 Latin1）
-    // 这会导致其他软件（如 mediainfo）无法正确读取中文
+    // 解决方案：清空包含非 Latin1 字符的 InfoTag 字段
     if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
-        return wavFile->save(RIFF::WAV::File::ID3v2, RIFF::WAV::File::StripOthers);
+        if (RIFF::Info::Tag *infoTag = wavFile->InfoTag()) {
+            // 遍历所有字段，清空非 Latin1 的
+            RIFF::Info::FieldListMap fields = infoTag->fieldListMap();
+            for (auto it = fields.begin(); it != fields.end(); ++it) {
+                if (!it->second.isLatin1()) {
+                    infoTag->removeField(it->first);
+                }
+            }
+        }
     }
     
     return _fileRef->save();
