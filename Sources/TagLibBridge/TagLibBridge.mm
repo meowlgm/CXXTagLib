@@ -474,125 +474,158 @@ static int pictureTypeFromString(NSString *str) {
         file->setProperties(props);
     } else {
         // 删除：需要遍历所有存在的标签类型
-        [self removePropertyFromAllTags:tagKey file:file];
+        [self removePropertyFromAllTags:tagKey file:file source:nil];
     }
 }
 
-// 从所有标签格式中删除指定属性（包括非标准属性）
-- (void)removePropertyFromAllTags:(const String &)tagKey file:(File *)file {
+- (void)setProperty:(NSString *)value forKey:(NSString *)key source:(NSString *)source {
+    if (!self.isValid || !key || !source) return;
+    
+    File *file = _fileRef->file();
+    if (!file) return;
+    
+    String tagKey = tagLibStringFromNSString(key);
+    
+    if (value) {
+        // 设置到指定 source（暂不支持，因为需要复杂的标签类型判断）
+        // 目前只支持删除操作
+    } else {
+        // 删除：从指定 source 删除
+        [self removePropertyFromAllTags:tagKey file:file source:source];
+    }
+}
+
+// 从指定或所有标签格式中删除指定属性（包括非标准属性）
+// source: nil 表示删除所有，否则只删除指定 source
+- (void)removePropertyFromAllTags:(const String &)tagKey file:(File *)file source:(NSString *)source {
+    // Helper: 检查是否应该处理此 source
+    auto shouldProcess = [source](NSString *tagSource) -> bool {
+        return source == nil || [source isEqualToString:tagSource];
+    };
+    
     // ID3v2
-    if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
-        // 先尝试通过 properties 删除标准属性
-        PropertyMap props = id3v2->properties();
-        if (props.contains(tagKey)) {
-            props.erase(tagKey);
-            id3v2->setProperties(props);
-        }
-        // 再尝试直接删除帧（处理非标准帧，如 APIC 等）
-        ByteVector frameId = tagKey.data(String::Latin1);
-        if (frameId.size() == 4) {
-            id3v2->removeFrames(frameId);
+    if (shouldProcess(@"ID3v2")) {
+        if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
+            PropertyMap props = id3v2->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                id3v2->setProperties(props);
+            }
+            ByteVector frameId = tagKey.data(String::Latin1);
+            if (frameId.size() == 4) {
+                id3v2->removeFrames(frameId);
+            }
         }
     }
     
     // ID3v1 (固定字段需要特殊处理)
-    if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-        if (tagKey == String("TRACKNUMBER")) {
-            id3v1->setTrack(0);
-        } else if (tagKey == String("DATE")) {
-            id3v1->setYear(0);
-        } else if (tagKey == String("TITLE")) {
-            id3v1->setTitle(String());
-        } else if (tagKey == String("ARTIST")) {
-            id3v1->setArtist(String());
-        } else if (tagKey == String("ALBUM")) {
-            id3v1->setAlbum(String());
-        } else if (tagKey == String("COMMENT")) {
-            id3v1->setComment(String());
-        } else if (tagKey == String("GENRE")) {
-            id3v1->setGenre(String());
+    if (shouldProcess(@"ID3v1")) {
+        if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
+            if (tagKey == String("TRACKNUMBER")) {
+                id3v1->setTrack(0);
+            } else if (tagKey == String("DATE")) {
+                id3v1->setYear(0);
+            } else if (tagKey == String("TITLE")) {
+                id3v1->setTitle(String());
+            } else if (tagKey == String("ARTIST")) {
+                id3v1->setArtist(String());
+            } else if (tagKey == String("ALBUM")) {
+                id3v1->setAlbum(String());
+            } else if (tagKey == String("COMMENT")) {
+                id3v1->setComment(String());
+            } else if (tagKey == String("GENRE")) {
+                id3v1->setGenre(String());
+            }
         }
     }
     
     // APE Tag (MPEG/APE/MPC/WavPack)
-    if (APE::Tag *ape = [self apeTagFromFile:file]) {
-        // 先尝试通过 properties 删除
-        PropertyMap props = ape->properties();
-        if (props.contains(tagKey)) {
-            props.erase(tagKey);
-            ape->setProperties(props);
+    if (shouldProcess(@"APE")) {
+        if (APE::Tag *ape = [self apeTagFromFile:file]) {
+            PropertyMap props = ape->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                ape->setProperties(props);
+            }
+            ape->removeItem(tagKey);
         }
-        // 再尝试直接通过 itemListMap 删除（处理非标准项）
-        ape->removeItem(tagKey);
     }
     
     // Xiph Comment (FLAC/Ogg/Opus/Speex)
-    if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
-        // Xiph Comment 的 properties() 已包含所有字段
-        // 使用 removeFields 确保删除（包括非标准字段）
-        xiph->removeFields(tagKey);
+    // 注意：Vorbis Comment, Opus, Speex, Ogg FLAC 都是 Xiph Comment
+    if (shouldProcess(@"Vorbis Comment") || shouldProcess(@"Opus") || 
+        shouldProcess(@"Speex") || shouldProcess(@"Ogg FLAC")) {
+        if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
+            xiph->removeFields(tagKey);
+        }
     }
     
     // MP4 Tag
-    if (auto *mp4File = dynamic_cast<MP4::File *>(file)) {
-        if (MP4::Tag *tag = mp4File->tag()) {
-            // 先尝试通过 properties 删除标准属性
-            PropertyMap props = tag->properties();
-            if (props.contains(tagKey)) {
-                props.erase(tagKey);
-                tag->setProperties(props);
+    if (shouldProcess(@"MP4")) {
+        if (auto *mp4File = dynamic_cast<MP4::File *>(file)) {
+            if (MP4::Tag *tag = mp4File->tag()) {
+                PropertyMap props = tag->properties();
+                if (props.contains(tagKey)) {
+                    props.erase(tagKey);
+                    tag->setProperties(props);
+                }
+                MP4::ItemMap &items = const_cast<MP4::ItemMap &>(tag->itemMap());
+                items.erase(tagKey);
             }
-            // 再尝试直接从 itemMap 删除（处理非标准项如 ©ART, ©alb 等）
-            MP4::ItemMap &items = const_cast<MP4::ItemMap &>(tag->itemMap());
-            items.erase(tagKey);
         }
     }
     
     // ASF Tag (WMA)
-    if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
-        if (ASF::Tag *tag = asfFile->tag()) {
-            // 先尝试通过 properties 删除标准属性
-            PropertyMap props = tag->properties();
-            if (props.contains(tagKey)) {
-                props.erase(tagKey);
-                tag->setProperties(props);
+    if (shouldProcess(@"ASF")) {
+        if (auto *asfFile = dynamic_cast<ASF::File *>(file)) {
+            if (ASF::Tag *tag = asfFile->tag()) {
+                PropertyMap props = tag->properties();
+                if (props.contains(tagKey)) {
+                    props.erase(tagKey);
+                    tag->setProperties(props);
+                }
+                tag->removeItem(tagKey);
             }
-            // 再尝试直接从 attributeListMap 删除（处理非标准属性）
-            tag->removeItem(tagKey);
         }
     }
     
     // WAV InfoTag (RIFF INFO)
-    if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
-        if (RIFF::Info::Tag *tag = wavFile->InfoTag()) {
-            PropertyMap props = tag->properties();
-            if (props.contains(tagKey)) {
-                props.erase(tagKey);
-                tag->setProperties(props);
+    if (shouldProcess(@"InfoTag")) {
+        if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+            if (RIFF::Info::Tag *tag = wavFile->InfoTag()) {
+                PropertyMap props = tag->properties();
+                if (props.contains(tagKey)) {
+                    props.erase(tagKey);
+                    tag->setProperties(props);
+                }
             }
         }
     }
     
     // DSDIFF DIIN Tag
-    if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
-        if (DSDIFF::DIIN::Tag *tag = dsdiffFile->DIINTag()) {
-            PropertyMap props = tag->properties();
-            if (props.contains(tagKey)) {
-                props.erase(tagKey);
-                tag->setProperties(props);
+    if (shouldProcess(@"DIIN")) {
+        if (auto *dsdiffFile = dynamic_cast<DSDIFF::File *>(file)) {
+            if (DSDIFF::DIIN::Tag *tag = dsdiffFile->DIINTag()) {
+                PropertyMap props = tag->properties();
+                if (props.contains(tagKey)) {
+                    props.erase(tagKey);
+                    tag->setProperties(props);
+                }
             }
         }
     }
     
-    // Mod/S3M/IT/XM (Mod::Tag) - 这些格式标签有限，直接用 file->setProperties
-    if (dynamic_cast<Mod::File *>(file) ||
-        dynamic_cast<S3M::File *>(file) ||
-        dynamic_cast<IT::File *>(file) ||
-        dynamic_cast<XM::File *>(file)) {
-        PropertyMap props = file->properties();
-        if (props.contains(tagKey)) {
-            props.erase(tagKey);
-            file->setProperties(props);
+    // Mod/S3M/IT/XM (Mod::Tag)
+    if (shouldProcess(@"MOD")) {
+        if (dynamic_cast<Mod::File *>(file) ||
+            dynamic_cast<S3M::File *>(file) ||
+            dynamic_cast<IT::File *>(file) ||
+            dynamic_cast<XM::File *>(file)) {
+            PropertyMap props = file->properties();
+            if (props.contains(tagKey)) {
+                props.erase(tagKey);
+                file->setProperties(props);
+            }
         }
     }
 }

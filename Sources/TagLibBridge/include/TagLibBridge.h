@@ -66,8 +66,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Get property value for key
 - (nullable NSString *)propertyForKey:(NSString *)key;
 
-/// Set property value for key
+/// Set property value for key (affects all tag formats)
 - (void)setProperty:(nullable NSString *)value forKey:(NSString *)key;
+
+/// Set property value for key in specific tag source only
+/// @param value Value to set, or nil to remove
+/// @param key Property key
+/// @param source Tag source name (e.g., "ID3v2", "APE", "Vorbis Comment")
+- (void)setProperty:(nullable NSString *)value forKey:(NSString *)key source:(NSString *)source;
 
 /// Get all property keys (merged, no duplicates)
 - (NSArray<NSString *> *)allPropertyKeys;

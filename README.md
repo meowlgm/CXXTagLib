@@ -280,7 +280,41 @@ file.removeProperties { $0.hasPrefix("MUSICBRAINZ") }
 file.save()  // 需要保存才生效
 ```
 
-> **注意**：删除操作会遍历文件中所有存在的标签格式（ID3v2, ID3v1, APE, Xiph, MP4, ASF, InfoTag, DIIN 等），确保彻底删除。
+#### 从指定标签源删除（v1.2.13+）
+
+可以通过 `from` 参数指定只从特定标签源删除，而不影响其他标签格式：
+
+```swift
+// 只从 APE 标签删除
+file.removeProperty("UNSYNCEDLYRICS", from: .ape)
+
+// 只从 ID3v1 删除多个属性
+file.removeProperties(["ALBUM", "ARTIST"], from: .id3v1)
+
+// 只从 ID3v2 按条件删除
+file.removeProperties(from: .id3v2) { $0.contains("LYRIC") }
+
+file.save()  // 需要保存才生效
+```
+
+**支持的 TagSource 枚举值**：
+
+| 枚举值 | 说明 |
+|--------|------|
+| `.id3v2` | ID3v2 标签 |
+| `.id3v1` | ID3v1 标签 |
+| `.ape` | APE 标签 |
+| `.vorbisComment` | Vorbis Comment（FLAC, Ogg Vorbis）|
+| `.opus` | Opus 标签 |
+| `.speex` | Speex 标签 |
+| `.oggFlac` | Ogg FLAC 标签 |
+| `.mp4` | MP4 标签 |
+| `.asf` | ASF 标签 (WMA) |
+| `.infoTag` | RIFF INFO 标签 (WAV) |
+| `.diin` | DSDIFF DIIN 标签 |
+| `.mod` | Mod 标签 |
+
+> **注意**：不指定 `from` 参数时，删除操作会遍历文件中所有存在的标签格式，确保彻底删除。
 
 ### 清除所有标签
 

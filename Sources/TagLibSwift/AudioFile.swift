@@ -352,26 +352,39 @@ public final class AudioFile {
         bridge.setProperty(value, forKey: key)
     }
     
-    /// Remove a property from all tag formats (ID3v2, ID3v1, APE, Xiph, MP4, ASF, etc.)
+    /// Remove a property from tag formats
+    /// - Parameters:
+    ///   - key: Property key to remove
+    ///   - source: Optional tag source to remove from. If nil, removes from all sources.
     /// Note: You must call save() after this to persist changes
-    public func removeProperty(_ key: String) {
-        bridge.setProperty(nil, forKey: key)
-    }
-    
-    /// Remove multiple properties from all tag formats
-    /// Note: You must call save() after this to persist changes
-    public func removeProperties(_ keys: [String]) {
-        for key in keys {
+    public func removeProperty(_ key: String, from source: TagSource? = nil) {
+        if let source = source {
+            bridge.setProperty(nil, forKey: key, source: source.rawValue)
+        } else {
             bridge.setProperty(nil, forKey: key)
         }
     }
     
-    /// Remove properties matching a predicate from all tag formats
+    /// Remove multiple properties from tag formats
+    /// - Parameters:
+    ///   - keys: Property keys to remove
+    ///   - source: Optional tag source to remove from. If nil, removes from all sources.
     /// Note: You must call save() after this to persist changes
-    public func removeProperties(where predicate: (String) -> Bool) {
+    public func removeProperties(_ keys: [String], from source: TagSource? = nil) {
+        for key in keys {
+            removeProperty(key, from: source)
+        }
+    }
+    
+    /// Remove properties matching a predicate from tag formats
+    /// - Parameters:
+    ///   - source: Optional tag source to remove from. If nil, removes from all sources.
+    ///   - predicate: Function that returns true for keys to remove
+    /// Note: You must call save() after this to persist changes
+    public func removeProperties(from source: TagSource? = nil, where predicate: (String) -> Bool) {
         for key in allPropertyKeys() {
             if predicate(key) {
-                bridge.setProperty(nil, forKey: key)
+                removeProperty(key, from: source)
             }
         }
     }
@@ -520,6 +533,22 @@ public struct AudioProperties: Sendable {
             return String(format: "%d:%02d", minutes, seconds)
         }
     }
+}
+
+/// Tag source types for targeted operations
+public enum TagSource: String, CaseIterable {
+    case id3v2 = "ID3v2"
+    case id3v1 = "ID3v1"
+    case ape = "APE"
+    case vorbisComment = "Vorbis Comment"
+    case opus = "Opus"
+    case speex = "Speex"
+    case oggFlac = "Ogg FLAC"
+    case mp4 = "MP4"
+    case asf = "ASF"
+    case infoTag = "InfoTag"
+    case diin = "DIIN"
+    case mod = "MOD"
 }
 
 /// Errors that can occur when working with audio files
