@@ -728,9 +728,6 @@ static int pictureTypeFromString(NSString *str) {
             addProps(tag->properties(), @"ID3v2");
             addID3v2Raw(tag, @"ID3v2");
         }
-        if (ID3v1::Tag *tag = mpegFile->ID3v1Tag()) {
-            addProps(tag->properties(), @"ID3v1");
-        }
         if (APE::Tag *tag = mpegFile->APETag(false)) {
             addProps(tag->properties(), @"APE");
             addAPERaw(tag, @"APE");
@@ -747,9 +744,6 @@ static int pictureTypeFromString(NSString *str) {
         if (ID3v2::Tag *tag = flacFile->ID3v2Tag(false)) {
             addProps(tag->properties(), @"ID3v2");
             addID3v2Raw(tag, @"ID3v2");
-        }
-        if (ID3v1::Tag *tag = flacFile->ID3v1Tag()) {
-            addProps(tag->properties(), @"ID3v1");
         }
         return result;
     }
@@ -841,10 +835,6 @@ static int pictureTypeFromString(NSString *str) {
     if (APE::Tag *ape = [self apeTagFromFile:file]) {
         addProps(ape->properties(), @"APE");
         addAPERaw(ape, @"APE");
-        // Also check ID3v1
-        if (ID3v1::Tag *id3v1 = [self getID3v1Tag:file]) {
-            addProps(id3v1->properties(), @"ID3v1");
-        }
         return result;
     }
     
