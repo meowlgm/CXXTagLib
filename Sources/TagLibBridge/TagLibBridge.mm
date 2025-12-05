@@ -1399,6 +1399,9 @@ static int pictureTypeFromString(NSString *str) {
 // MARK: - Picture Operations for APE Tag (APE, WavPack, MPC)
 
 - (APE::Tag *)apeTagFromFile:(File *)file {
+    if (auto *mpeg = dynamic_cast<MPEG::File *>(file)) {
+        return mpeg->APETag(false);
+    }
     if (auto *ape = dynamic_cast<APE::File *>(file)) {
         return ape->APETag(false);
     }
@@ -1412,6 +1415,9 @@ static int pictureTypeFromString(NSString *str) {
 }
 
 - (APE::Tag *)apeTagFromFileCreate:(File *)file {
+    if (auto *mpeg = dynamic_cast<MPEG::File *>(file)) {
+        return mpeg->APETag(true);
+    }
     if (auto *ape = dynamic_cast<APE::File *>(file)) {
         return ape->APETag(true);
     }
