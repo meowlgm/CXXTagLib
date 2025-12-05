@@ -1762,6 +1762,17 @@ static int pictureTypeFromString(NSString *str) {
 
 - (BOOL)save {
     if (!self.isValid) return NO;
+    
+    File *file = _fileRef->file();
+    if (!file) return NO;
+    
+    // WAV 文件特殊处理：只保存 ID3v2，不保存 InfoTag
+    // 因为 TagLib 的 InfoTag 使用 UTF-8 编码，不符合 RIFF INFO 规范（应为 Latin1）
+    // 这会导致其他软件（如 mediainfo）无法正确读取中文
+    if (auto *wavFile = dynamic_cast<RIFF::WAV::File *>(file)) {
+        return wavFile->save(RIFF::WAV::File::ID3v2, RIFF::WAV::File::StripOthers);
+    }
+    
     return _fileRef->save();
 }
 
