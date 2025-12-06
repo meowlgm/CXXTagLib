@@ -1490,6 +1490,7 @@ static int pictureTypeFromString(NSString *str) {
     
     if ([upper containsString:@"FRONT"]) return @"Front Cover";
     if ([upper containsString:@"BACK"]) return @"Back Cover";
+    if ([upper containsString:@"LEAD ARTIST"]) return @"Lead Artist";
     if ([upper containsString:@"ARTIST"]) return @"Artist";
     if ([upper containsString:@"BAND"]) return @"Band";
     if ([upper containsString:@"MEDIA"]) return @"Media";
@@ -1535,6 +1536,8 @@ static int pictureTypeFromString(NSString *str) {
             key = @"COVER ART (FRONT)";
         } else if ([upperType containsString:@"BACK"]) {
             key = @"COVER ART (BACK)";
+        } else if ([upperType containsString:@"LEAD ARTIST"]) {
+            key = @"COVER ART (LEAD ARTIST)";
         } else if ([upperType containsString:@"ARTIST"]) {
             key = @"COVER ART (ARTIST)";
         } else if ([upperType containsString:@"BAND"] || [upperType containsString:@"LOGO"]) {
