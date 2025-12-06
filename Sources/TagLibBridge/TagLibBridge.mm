@@ -1458,12 +1458,9 @@ static int pictureTypeFromString(NSString *str) {
     if (!tag) return result;
     
     // APE stores covers as binary items with keys starting with "COVER ART"
-    // Official: only "Cover Art (front)" is defined by Monkey's Audio SDK
-    // De facto: Back, Artist, Band, Media, Other are used by foobar2000/Mp3tag etc.
     // We read ALL keys starting with "COVER ART" for maximum compatibility
     for (auto it = tag->itemListMap().begin(); it != tag->itemListMap().end(); ++it) {
         String key = it->first;
-        // Check if key starts with "COVER ART" (case insensitive, but TagLib stores uppercase)
         if (key.upper().startsWith("COVER ART") && it->second.type() == APE::Item::Binary) {
             ByteVector data = it->second.binaryData();
             // APE format: [description/extension][NULL][image data]
@@ -1471,17 +1468,51 @@ static int pictureTypeFromString(NSString *str) {
             if (nullPos >= 0) {
                 ByteVector imageData = data.mid(nullPos + 1);
                 if (imageData.size() > 0) {
+                    // Convert APE key to standard pictureType for API consistency
+                    NSString *pictureType = [self standardPictureTypeFromAPEKey:stringFromTagLibString(key)];
+                    
                     TLPicture *pic = [[TLPicture alloc]
                         initWithData:nsDataFromByteVector(imageData)
                             mimeType:@""  // Caller can detect from raw data
                          description:@""
-                         pictureType:stringFromTagLibString(key)];
+                         pictureType:pictureType];
                     [result addObject:pic];
                 }
             }
         }
     }
     return result;
+}
+
+/// Convert APE key (e.g. "COVER ART (BACK)") to standard pictureType (e.g. "Back Cover")
+- (NSString *)standardPictureTypeFromAPEKey:(NSString *)apeKey {
+    NSString *upper = apeKey.uppercaseString;
+    
+    if ([upper containsString:@"FRONT"]) return @"Front Cover";
+    if ([upper containsString:@"BACK"]) return @"Back Cover";
+    if ([upper containsString:@"ARTIST"]) return @"Artist";
+    if ([upper containsString:@"BAND"]) return @"Band";
+    if ([upper containsString:@"MEDIA"]) return @"Media";
+    if ([upper containsString:@"OTHER"]) return @"Other";
+    if ([upper containsString:@"ICON"]) return @"File Icon";
+    if ([upper containsString:@"LEAFLET"]) return @"Leaflet Page";
+    if ([upper containsString:@"CONDUCTOR"]) return @"Conductor";
+    if ([upper containsString:@"COMPOSER"]) return @"Composer";
+    if ([upper containsString:@"LYRICIST"]) return @"Lyricist";
+    if ([upper containsString:@"ILLUSTRATION"]) return @"Illustration";
+    if ([upper containsString:@"LOGO"]) return @"Band Logo";
+    if ([upper containsString:@"PUBLISHER"]) return @"Publisher Logo";
+    
+    // For custom types, extract content from "COVER ART (xxx)" -> "xxx"
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"COVER ART \\((.+)\\)"
+                                                                           options:NSRegularExpressionCaseInsensitive
+                                                                             error:nil];
+    NSTextCheckingResult *match = [regex firstMatchInString:apeKey options:0 range:NSMakeRange(0, apeKey.length)];
+    if (match && match.numberOfRanges > 1) {
+        return [apeKey substringWithRange:[match rangeAtIndex:1]];
+    }
+    
+    return @"Other";
 }
 
 - (BOOL)addPictureToAPE:(APE::Tag *)tag picture:(TLPicture *)picture {
