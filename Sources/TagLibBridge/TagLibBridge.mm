@@ -1541,6 +1541,25 @@ static int pictureTypeFromString(NSString *str) {
     return YES;
 }
 
+- (BOOL)removePictureFromAPEAtIndex:(APE::Tag *)tag index:(NSInteger)index {
+    if (!tag) return NO;
+    
+    // Collect all cover art keys
+    std::vector<String> coverKeys;
+    for (auto it = tag->itemListMap().begin(); it != tag->itemListMap().end(); ++it) {
+        if (it->first.upper().startsWith("COVER ART") && it->second.type() == APE::Item::Binary) {
+            coverKeys.push_back(it->first);
+        }
+    }
+    
+    if (index < 0 || index >= (NSInteger)coverKeys.size()) {
+        return NO;
+    }
+    
+    tag->removeItem(coverKeys[index]);
+    return YES;
+}
+
 // MARK: - Picture Operations for ID3v2-based formats (WAV, AIFF, DSF, DSDIFF, TrueAudio)
 
 - (ID3v2::Tag *)id3v2TagFromFile:(File *)file {
@@ -1730,7 +1749,11 @@ static int pictureTypeFromString(NSString *str) {
     if (Ogg::XiphComment *xiph = [self xiphCommentFromFile:file]) {
         return [self removePictureFromXiphAtIndex:xiph index:index];
     }
-    // APE and ID3v2-based formats - use read-filter-rewrite approach
+    // APE Tag formats
+    if (APE::Tag *ape = [self apeTagFromFile:file]) {
+        return [self removePictureFromAPEAtIndex:ape index:index];
+    }
+    // ID3v2-based formats - use read-filter-rewrite approach
     // (They don't have convenient per-index removal)
     
     return NO;
