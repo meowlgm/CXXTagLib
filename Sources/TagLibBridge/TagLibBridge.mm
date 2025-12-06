@@ -1457,28 +1457,25 @@ static int pictureTypeFromString(NSString *str) {
     NSMutableArray<TLPicture *> *result = [NSMutableArray array];
     if (!tag) return result;
     
-    // APE stores covers as binary items with key "Cover Art (Front)", "Cover Art (Back)", etc.
-    static const char *coverKeys[] = {
-        "Cover Art (Front)", "Cover Art (Back)", "Cover Art (Other)",
-        "Cover Art (Media)", "Cover Art (Artist)", "Cover Art (Band)"
-    };
-    
-    for (const char *key : coverKeys) {
-        if (tag->itemListMap().contains(key)) {
-            APE::Item item = tag->itemListMap()[key];
-            if (item.type() == APE::Item::Binary) {
-                ByteVector data = item.binaryData();
-                // APE binary data starts with description (null-terminated) then image data
-                int nullPos = data.find('\0');
-                if (nullPos >= 0) {
-                    ByteVector imageData = data.mid(nullPos + 1);
-                    NSString *mimeType = @"image/jpeg"; // Default, would need magic byte detection for accuracy
-                    
+    // APE stores covers as binary items with keys starting with "COVER ART"
+    // Official: only "Cover Art (front)" is defined by Monkey's Audio SDK
+    // De facto: Back, Artist, Band, Media, Other are used by foobar2000/Mp3tag etc.
+    // We read ALL keys starting with "COVER ART" for maximum compatibility
+    for (auto it = tag->itemListMap().begin(); it != tag->itemListMap().end(); ++it) {
+        String key = it->first;
+        // Check if key starts with "COVER ART" (case insensitive, but TagLib stores uppercase)
+        if (key.upper().startsWith("COVER ART") && it->second.type() == APE::Item::Binary) {
+            ByteVector data = it->second.binaryData();
+            // APE format: [description/extension][NULL][image data]
+            int nullPos = data.find('\0');
+            if (nullPos >= 0) {
+                ByteVector imageData = data.mid(nullPos + 1);
+                if (imageData.size() > 0) {
                     TLPicture *pic = [[TLPicture alloc]
                         initWithData:nsDataFromByteVector(imageData)
-                            mimeType:mimeType
+                            mimeType:@""  // Caller can detect from raw data
                          description:@""
-                         pictureType:[NSString stringWithUTF8String:key]];
+                         pictureType:stringFromTagLibString(key)];
                     [result addObject:pic];
                 }
             }
@@ -1490,16 +1487,38 @@ static int pictureTypeFromString(NSString *str) {
 - (BOOL)addPictureToAPE:(APE::Tag *)tag picture:(TLPicture *)picture {
     if (!tag) return NO;
     
-    NSString *key = @"Cover Art (Front)";
-    if ([picture.pictureType containsString:@"Back"]) {
-        key = @"Cover Art (Back)";
-    } else if ([picture.pictureType containsString:@"Artist"]) {
-        key = @"Cover Art (Artist)";
+    NSString *key;
+    NSString *type = picture.pictureType;
+    if (type.length == 0) {
+        type = @"Front"; // Default if empty
+    }
+    NSString *upperType = type.uppercaseString;
+    
+    // If user already provided a full APE key (starts with "COVER ART"), use it directly
+    if ([upperType hasPrefix:@"COVER ART"]) {
+        key = upperType;
+    } else {
+        // Map common picture types to standard APE keys for better compatibility
+        // Otherwise, use user's type directly: "COVER ART (<TYPE>)"
+        if ([upperType containsString:@"FRONT"]) {
+            key = @"COVER ART (FRONT)";
+        } else if ([upperType containsString:@"BACK"]) {
+            key = @"COVER ART (BACK)";
+        } else if ([upperType containsString:@"ARTIST"]) {
+            key = @"COVER ART (ARTIST)";
+        } else if ([upperType containsString:@"BAND"] || [upperType containsString:@"LOGO"]) {
+            key = @"COVER ART (BAND)";
+        } else if ([upperType containsString:@"MEDIA"] || [upperType containsString:@"CD"] || [upperType containsString:@"DISC"]) {
+            key = @"COVER ART (MEDIA)";
+        } else {
+            // Use user's original type as-is (uppercase)
+            key = [NSString stringWithFormat:@"COVER ART (%@)", upperType];
+        }
     }
     
-    // APE format: description + null byte + image data
+    // APE format: [description/extension][NULL][image data]
     ByteVector data;
-    data.append(ByteVector("", 1)); // Empty description + null
+    data.append(ByteVector("\0", 1)); // Empty description + null terminator
     data.append(byteVectorFromNSData(picture.data));
     
     tag->setItem([key UTF8String], APE::Item([key UTF8String], data, true));
@@ -1509,12 +1528,14 @@ static int pictureTypeFromString(NSString *str) {
 - (BOOL)removeAllPicturesFromAPE:(APE::Tag *)tag {
     if (!tag) return YES;
     
-    static const char *coverKeys[] = {
-        "Cover Art (Front)", "Cover Art (Back)", "Cover Art (Other)",
-        "Cover Art (Media)", "Cover Art (Artist)", "Cover Art (Band)"
-    };
-    
-    for (const char *key : coverKeys) {
+    // Remove ALL keys starting with "COVER ART"
+    std::vector<String> keysToRemove;
+    for (auto it = tag->itemListMap().begin(); it != tag->itemListMap().end(); ++it) {
+        if (it->first.upper().startsWith("COVER ART")) {
+            keysToRemove.push_back(it->first);
+        }
+    }
+    for (const auto &key : keysToRemove) {
         tag->removeItem(key);
     }
     return YES;
