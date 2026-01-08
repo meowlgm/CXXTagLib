@@ -12,14 +12,11 @@ let package = Package(
 		.watchOS(.v6),
 	],
 	products: [
-		// Products define the executables and libraries a package produces, making them visible to other packages.
-		.library(
-			name: "taglib",
-			targets: [
-				"taglib",
-			]),
+		// Dynamic library for LGPL-2.1 compliance
+		// TagLib is LGPL licensed, dynamic linking allows closed-source apps to use it
 		.library(
 			name: "TagLibSwift",
+			type: .dynamic,
 			targets: [
 				"TagLibSwift",
 			]),
