@@ -261,11 +261,13 @@ void FileStream::insert(const ByteVector &data, offset_t start, size_t replace)
   if(data.size() == replace) {
     seek(start);
     writeBlock(data);
+    fflush(d->file);
     return;
   }
   if(data.size() < replace) {
     seek(start);
     writeBlock(data);
+    // removeBlock -> truncate -> fflush, so no extra flush needed here
     removeBlock(start + data.size(), replace - data.size());
     return;
   }
@@ -325,6 +327,8 @@ void FileStream::insert(const ByteVector &data, offset_t start, size_t replace)
 
     buffer = aboutToOverwrite;
   }
+
+  fflush(d->file);
 }
 
 void FileStream::removeBlock(offset_t start, size_t length)

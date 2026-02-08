@@ -45,6 +45,9 @@
 // Rating (Popularimeter)
 #include <taglib/popularimeterframe.h>
 
+// Text identification (TXXX)
+#include <taglib/textidentificationframe.h>
+
 #include <taglib/tpropertymap.h>
 
 using namespace TagLib;
@@ -498,22 +501,105 @@ static int pictureTypeFromString(NSString *str) {
 // 从指定或所有标签格式中删除指定属性（包括非标准属性）
 // source: nil 表示删除所有，否则只删除指定 source
 - (void)removePropertyFromAllTags:(const String &)tagKey file:(File *)file source:(NSString *)source {
+    // MPEG 文件的 save() 默认使用 Duplicate 模式，会在 ID3v1 和 ID3v2 之间互相复制基础字段。
+    // 因此当指定删除其中一个标签的基础字段时，必须同时清除另一个标签中的对应字段，
+    // 否则 save 时会被复制回来。
+    // 基础字段：TITLE, ARTIST, ALBUM, COMMENT, GENRE, DATE, TRACKNUMBER
+    bool isID3v1Field = (tagKey == "TITLE" || tagKey == "ARTIST" || tagKey == "ALBUM" ||
+                         tagKey == "COMMENT" || tagKey == "GENRE" || tagKey == "DATE" ||
+                         tagKey == "TRACKNUMBER");
+    bool isMPEG = dynamic_cast<MPEG::File *>(file) != nullptr;
+    
+    // 当指定了 source 且是 MPEG 文件的基础字段时，需要同时处理 ID3v1 和 ID3v2
+    bool forceID3v1 = (source != nil && [source isEqualToString:@"ID3v2"] && isMPEG && isID3v1Field);
+    bool forceID3v2 = (source != nil && [source isEqualToString:@"ID3v1"] && isMPEG && isID3v1Field);
+    
     // Helper: 检查是否应该处理此 source
-    auto shouldProcess = [source](NSString *tagSource) -> bool {
-        return source == nil || [source isEqualToString:tagSource];
+    auto shouldProcess = [source, forceID3v1, forceID3v2](NSString *tagSource) -> bool {
+        if (source == nil) return true;
+        if ([source isEqualToString:tagSource]) return true;
+        // MPEG Duplicate 模式补偿：同时处理关联标签
+        if (forceID3v1 && [tagSource isEqualToString:@"ID3v1"]) return true;
+        if (forceID3v2 && [tagSource isEqualToString:@"ID3v2"]) return true;
+        return false;
     };
     
     // ID3v2
     if (shouldProcess(@"ID3v2")) {
         if (ID3v2::Tag *id3v2 = [self getID3v2TagForWrite:file]) {
-            PropertyMap props = id3v2->properties();
-            if (props.contains(tagKey)) {
-                props.erase(tagKey);
-                id3v2->setProperties(props);
-            }
-            ByteVector frameId = tagKey.data(String::Latin1);
-            if (frameId.size() == 4) {
-                id3v2->removeFrames(frameId);
+            // 属性键 → ID3v2 帧 ID 映射（TagLib 内部映射的反向表）
+            static const std::map<String, ByteVector> propertyToFrameId = {
+                {String("ALBUM"), ByteVector("TALB", 4)},
+                {String("ALBUMARTIST"), ByteVector("TPE2", 4)},
+                {String("ALBUMSORT"), ByteVector("TSOA", 4)},
+                {String("ARTIST"), ByteVector("TPE1", 4)},
+                {String("ARTISTSORT"), ByteVector("TSOP", 4)},
+                {String("ASIN"), ByteVector("TXXX", 4)},
+                {String("BARCODE"), ByteVector("TXXX", 4)},
+                {String("BPM"), ByteVector("TBPM", 4)},
+                {String("CATALOGNUMBER"), ByteVector("TXXX", 4)},
+                {String("COMMENT"), ByteVector("COMM", 4)},
+                {String("COMPOSER"), ByteVector("TCOM", 4)},
+                {String("COMPOSERSORT"), ByteVector("TSOC", 4)},
+                {String("CONDUCTOR"), ByteVector("TPE3", 4)},
+                {String("COPYRIGHT"), ByteVector("TCOP", 4)},
+                {String("DATE"), ByteVector("TDRC", 4)},
+                {String("DISCNUMBER"), ByteVector("TPOS", 4)},
+                {String("ENCODEDBY"), ByteVector("TENC", 4)},
+                {String("GENRE"), ByteVector("TCON", 4)},
+                {String("ISRC"), ByteVector("TSRC", 4)},
+                {String("LABEL"), ByteVector("TPUB", 4)},
+                {String("LYRICIST"), ByteVector("TEXT", 4)},
+                {String("MEDIA"), ByteVector("TMED", 4)},
+                {String("MOOD"), ByteVector("TMOO", 4)},
+                {String("ORIGINALDATE"), ByteVector("TDOR", 4)},
+                {String("REMIXER"), ByteVector("TPE4", 4)},
+                {String("SUBTITLE"), ByteVector("TIT3", 4)},
+                {String("TITLE"), ByteVector("TIT2", 4)},
+                {String("TITLESORT"), ByteVector("TSOT", 4)},
+                {String("TRACKNUMBER"), ByteVector("TRCK", 4)},
+            };
+            
+            // 直接通过帧 ID 删除对应帧（不依赖 setProperties）
+            auto it = propertyToFrameId.find(tagKey);
+            if (it != propertyToFrameId.end()) {
+                const ByteVector &fid = it->second;
+                if (fid == ByteVector("TXXX", 4)) {
+                    // TXXX 帧需要按描述匹配删除
+                    auto frames = id3v2->frameList("TXXX");
+                    for (auto frame : frames) {
+                        if (auto *txxx = dynamic_cast<ID3v2::UserTextIdentificationFrame *>(frame)) {
+                            if (txxx->description().upper() == tagKey) {
+                                id3v2->removeFrame(txxx);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    id3v2->removeFrames(fid);
+                }
+            } else {
+                // 非标准属性：先尝试通过 PropertyMap 删除
+                PropertyMap props = id3v2->properties();
+                if (props.contains(tagKey)) {
+                    props.erase(tagKey);
+                    id3v2->setProperties(props);
+                }
+                // 尝试作为帧 ID 直接删除
+                ByteVector frameId = tagKey.data(String::Latin1);
+                if (frameId.size() == 4) {
+                    id3v2->removeFrames(frameId);
+                }
+                // 也尝试作为 TXXX 描述删除
+                auto frames = id3v2->frameList("TXXX");
+                for (auto frame : frames) {
+                    if (auto *txxx = dynamic_cast<ID3v2::UserTextIdentificationFrame *>(frame)) {
+                        if (txxx->description().upper() == tagKey.upper()) {
+                            id3v2->removeFrame(txxx);
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
@@ -569,8 +655,6 @@ static int pictureTypeFromString(NSString *str) {
                     props.erase(tagKey);
                     tag->setProperties(props);
                 }
-                MP4::ItemMap &items = const_cast<MP4::ItemMap &>(tag->itemMap());
-                items.erase(tagKey);
             }
         }
     }
